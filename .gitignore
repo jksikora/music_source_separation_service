@@ -1,0 +1,3 @@
+.venv_FastAPI/
+.pytest_cache/
+__pycache__/
