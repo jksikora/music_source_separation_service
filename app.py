@@ -47,8 +47,6 @@ def music_source_separation(audiofile: dict = Depends(audiofile_verification)) -
         result[stem_name] = { #Using the stem_name as a key = Creating a smaller dict inside the big result dict for each stem
             "file_id": stem_file_id,
             "filename": f"{stem_name}_{file.filename}",
-            "audio": stem_waveform,
-            "sample_rate": sample_rate,
             "download_url": f"/download_audio/{stem_file_id}"
         }
 

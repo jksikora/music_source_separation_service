@@ -157,10 +157,9 @@ async def test_audiofile_verification_invalid_file():
 # Goals:
 # 1. Check that the function returns a dictionary with expected stems
 # 2. Check that each stem contains expected keys and types
-# 4. Check that the waveform has data
-# 5. Check that the stems are stored in the in-memory storage with correct data
-# 6. Check that the download URL is correct
-# 7. Check that the stored waveform matches the stem audio
+# 3. Check that the stems are stored in the in-memory storage with correct data
+# 4. Check that the download URL is correct
+# 5. Check that the stored waveform matches the stem audio
 def test_music_source_separation(sample_audio_file):
     audio_bytes, _ = sample_audio_file
     upload_file = UploadFile(filename="test.wav", file=io.BytesIO(audio_bytes))
@@ -179,20 +178,19 @@ def test_music_source_separation(sample_audio_file):
     expected_stems = {"vocals", "drums", "bass", "other"}
     assert set(result.keys()) == expected_stems, "The result does not contain the expected stems" #Check that there is no missing or extra stems
 
-    expected_keys = {"file_id", "filename", "audio", "sample_rate", "download_url"}
+    expected_keys = {"file_id", "filename", "download_url"}
     for stem_name, stem_info in result.items(): #Tulple unpacking to get stem name and its info
         assert set(stem_info.keys()) == expected_keys, f"Stem '{stem_name}' does not contain the expected keys" #Check that each stem info has all expected keys
-        assert stem_info["audio"].shape[1] > 0, f"Waveform has no data for stem '{stem_name}'"  #Check that the waveform has data
         
         file_id = stem_info["file_id"] #Get the file_id of the stem
         assert file_id in storage, f"Stem '{stem_name}' with file_id '{file_id}' not found in storage" #Check that the stem is stored in memory
 
         stored_filename, stored_waveform, stored_fs = storage[file_id] #Retrieve stored data from in-memory storage
         assert stored_filename == stem_info["filename"], f"Filename mismatch for stem '{stem_name}'" #Check that the stored filename matches the stem filename
-        assert stored_fs == stem_info["sample_rate"], f"Sample rate mismatch for stem '{stem_name}'" #Check that the stored sample rate matches the stem sample rate
+        assert stored_fs == sample_rate, f"Sample rate mismatch for stem '{stem_name}'" #Check that the stored sample rate matches the stem sample rate
         assert stem_info["download_url"] == f"/download_audio/{file_id}", f"Download URL mismatch for stem '{stem_name}'"  #Check that the download URL is correct
         #assert torchaudio.equal(stored_waveform, stem_info["audio"])  #Check that stored waveform matches the stem audio
-        assert np.array_equal(stored_waveform.numpy(), stem_info["audio"].numpy()), f"Waveform content mismatch for stem '{stem_name}'"  #Check that stored waveform matches the stem audio
+        assert np.array_equal(stored_waveform.numpy(), waveform.numpy()), f"Waveform content mismatch for stem '{stem_name}'"  #Check that stored waveform matches the stem audio
 
 # Testing convert_to_audio_buffer function
 # Goals:
