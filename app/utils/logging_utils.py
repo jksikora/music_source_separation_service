@@ -69,7 +69,7 @@ class CustomFormatter(logging.Formatter):
               status = record.status
               status_display = f"{status_color}{BOLD}status: {RESET}{status_color}{status}{RESET}"
               data = record.data
-              data_display = f"{data_color}{BOLD}data: {RESET}{data_color}{data}{RESET}"
+              data_display = f"{data_color}{BOLD}data: {RESET}{data_color}({data}){RESET}"
               formatted = f"{levelname_display} {name_display} | {action_display} [{status_display}] | [{data_display}] | {time}"
         else:
             message = record.getMessage()

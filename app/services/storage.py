@@ -1,7 +1,7 @@
 from app.schemas.audio_schemas import AudioData
 from app.utils.logging_utils import get_logger
 from abc import ABC, abstractmethod
-import asyncio
+import asyncio, time
 
 # === Abstract Storage Interface ===
 class StorageInterface(ABC): # Abstract Base Class for storage implementations
@@ -37,10 +37,12 @@ class Storage(StorageInterface):
         self._storage: dict[str, AudioData] = {} # In-memory storage dictionary
         self._lock = asyncio.Lock() # Async lock for thread-safe operations
         self._logger = get_logger(__name__) # Logger for storage
+        self._expiration_time_sec: float = 10*60  # Expiration time for stored files in seconds (10 minutes)
     
     async def save(self, file_id: str, audio_data: AudioData) -> None:
         """Function to save audio data in storage"""
         async with self._lock: # Acquire lock for thread-safe operation
+            await self._cleanup() # Remove expired files before inserting new one
             self._storage[file_id] = audio_data 
             self._logger.info(action="audio_save", status="in progress", data={"file_id": file_id, "filename": audio_data.filename}) 
     
@@ -77,6 +79,14 @@ class Storage(StorageInterface):
             previous_count = len(self._storage)
             self._storage.clear()
             self._logger.info(action="list_clear", status="success", data={"previous_count": previous_count})
+    
+    async def _cleanup(self) -> None:
+        """Helper function to clean up expired files based on expiration time; Called internally before saving new files"""
+        now = time.time()
+        expired_ids = [file_id for file_id, data in self._storage.items() if now - data.created_at >= self._expiration_time_sec]
+        for file_id in expired_ids:
+            self._storage.pop(file_id, None)
+            self._logger.info(action="audio_delete", status="success", data={"file_id": file_id, "reason": "exceeded expiration time"})
 
 
 storage = Storage() # Global storage instance
