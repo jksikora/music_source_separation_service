@@ -1,118 +1,126 @@
-from fastapi import FastAPI, UploadFile, HTTPException, APIRouter
+from fastapi import FastAPI, UploadFile, HTTPException
 from fastapi.responses import StreamingResponse
-import io
-import soundfile as sf
-import numpy as np
-import zipfile
-import importlib.util
-import asyncio
-from pathlib import Path
 from scnet.inference import Seperator, SCNet
+from app.utils.config_utils import load_worker_config
+from app.utils.worker_utils import validate_outputs, zipstream_generator
+from app.utils.logging_utils import setup_logging, get_logger
 from ml_collections import ConfigDict
-import yaml
-import httpx
-from zipstream.ng import ZipStream
+from pathlib import Path
+import soundfile as sf
+import yaml, asyncio, importlib.util, io, httpx 
 
 app = FastAPI(title = "SCNetWorker")
 
-# --- Load worker config ---
+setup_logging() # Setup logging configuration
+logger = get_logger(__name__) # Logger for SCNet Worker
 
-config_path = Path(__file__).resolve().parents[0] / "scnet01_config.yaml"
-with open(config_path) as f:
-    worker_config = yaml.safe_load(f)
 
-worker_id = worker_config["worker_id"]
-model_type = worker_config["model_type"]
-main_app_address = worker_config["main_app_address"]
-address = worker_config["address"]
+# === Global Separator Instance and Inference Lock ===
+separator: Seperator | None = None # Initialize separator instance on startup
+inference_lock = asyncio.Lock() # Initialize lock on startup to serialize inference requests
 
-# --- Model initialization ---
 
-separator: Seperator | None = None
-inference_lock = asyncio.Lock()
+# === Worker Configuration Loaded from YAML File ===
+try:
+    worker_config = load_worker_config()
+except (FileNotFoundError, ValueError) as exc:
+    logger.error(action="config_loading", status="failed", data={"error": "invalid_worker_config", "details": str(exc)})
+    raise RuntimeError("Loading worker configuration failed") from exc # Raise error if config file is missing or invalid, from exc chains the original exception to the new one
 
+worker_id = worker_config.worker_id
+model_type = worker_config.model_type
+app_address = worker_config.app_address
+worker_address = worker_config.worker_address
+
+
+# === Startup Event ===
 @app.on_event("startup")
-async def load_model():
+async def load_model() -> None:
+    """On startup load SCNet model, initialize separator instance on startup and try registering worker"""
     global separator
     
-    spec = importlib.util.find_spec("scnet")
+    spec = importlib.util.find_spec("scnet") # Check if SCNet package is importable
     if spec is None:
         raise ImportError("SCNet package not found")
     
-    scnet_root = Path(spec.submodule_search_locations[0]).resolve().parent
-    config_path = str(scnet_root / "conf" / "config.yaml")
+    scnet_root = Path(spec.submodule_search_locations[0]).resolve().parent # Get SCNet package root
+    config_path = str(scnet_root / "conf" / "config.yaml") # Path to SCNet default config
+    project_root = Path(__file__).resolve().parents[2] # Get the project root
+    checkpoint_path = str(project_root / "checkpoints" / "scnet" / "checkpoint.th") # Path to SCNet checkpoint
 
-    repo_root = Path(__file__).resolve().parents[2]
-    checkpoint_path = str(repo_root / "checkpoints" / "scnet" / "checkpoint.th")
-
-    with open(config_path, "r") as f:
-        config = ConfigDict(yaml.load(f, Loader=yaml.FullLoader))
+    with open(config_path, "r") as f: # Load SCNet config file
+        config = ConfigDict(yaml.load(f, Loader=yaml.FullLoader)) # Load YAML content
         
-    model = SCNet(**config.model)
-    model.eval()
-    separator = Seperator(model, checkpoint_path)
+    model = SCNet(**config.model) # Unpack model configuration and create SCNet model instance
+    model.eval() # Set model to evaluation mode
+    separator = Seperator(model, checkpoint_path) # Load model checkpoint into Seperator instance, select device automatically (CPU/GPU) and prepare for inference
 
-    print(f"[{worker_id}] Model loaded successfully, registering with main app...")
-
+    logger.info(action="model_loading", status="success", data={"worker_id": worker_id, "model_type": model_type})
     await try_register()
 
+
+# === Inference Endpoint ===
 @app.post(f"/{worker_id}/inference")
-async def infer(file: UploadFile):
+async def infer(file: UploadFile) -> StreamingResponse:
+    """Endpoint for performing music source separation inference on uploaded audio file"""
     try:
-        audio = await file.read()
-        audio_buffer = io.BytesIO(audio)
-        waveform, sample_rate = sf.read(audio_buffer, dtype="float32")
+        if separator is None: # Check if separator is initialized
+            logger.error(action="inference", status="failed", data={"worker_id": worker_id, "filename": file.filename, "error": "model_not_loaded"})
+            raise HTTPException(status_code=503, detail="Model not loaded")
+
+        audio = await file.read() # Read uploaded audio file
+        audio_buffer = io.BytesIO(audio) # Create in-memory buffer for audio data
+        waveform, sample_rate = sf.read(audio_buffer, dtype="float32") # Read audio data from buffer
           
-        async with inference_lock:
-            output_waveforms, output_sample_rates = await asyncio.to_thread(
-                separator.separate_music_file, waveform, sample_rate
-            )
+        async with inference_lock: # Acquire lock to serialize inference requests
+            output_waveforms, output_sample_rates = await asyncio.to_thread(separator.separate_music_file, waveform, sample_rate) # Perform inference in a separate thread
 
-        chunk_size = 256 * 1024  # 256 KB
-        def file_generator(name: str, arr: np.ndarray, sample_rate: int):
-            buffer = io.BytesIO()
-            sf.write(buffer, arr, sample_rate, format="WAV")
-            buffer.seek(0)
-            while True:
-                chunk = buffer.read(chunk_size)
-                if not chunk:
-                    break
-                yield chunk
-          
-        zipstream = ZipStream(sized=True)
+        validate_outputs(output_waveforms, output_sample_rates, worker_id=worker_id, filename=file.filename) # Validate inference outputs
 
-        for name, arr in output_waveforms.items():
-            zipstream.add(
-                file_generator(name, arr, output_sample_rates[name]),
-                f"{name}.wav"
-            )
-
-        headers = {"Content-Disposition": 'attachment; filename="separated_stems.zip"'}
-
-        return StreamingResponse(zipstream, media_type="application/zip", headers=headers)
+        zipstream, headers = zipstream_generator(output_waveforms, output_sample_rates, worker_id, file.filename) # Create streaming ZIP response
+        return StreamingResponse(zipstream, media_type="application/zip", headers=headers) #Stream the ZIP file as a response
+    
+    except HTTPException: 
+        raise # Re-raise HTTP exceptions from _validate_outputs to preserve status codes
 
     except Exception as e:
+        logger.exception(action="inference", status="failed", data={"worker_id": worker_id, "filename": file.filename, "status_code": 500, "error": str(e)})
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/register_request")
-async def register_request():
-    await try_register()
-    return {"status": "registered"}
 
-async def try_register():
+# === Register Request Endpoint ===
+@app.post("/register_request")
+async def register_request() -> None:
+    """Endpoint for main app to request worker registration in Session Manager"""
+    try:
+        await try_register()
+        logger.info(action="registration_request", status="success", data={"worker_id": worker_id})
+
+    except Exception:
+        logger.warning(action="registration_request", status="failed", data={"worker_id": worker_id, "status_code": 500, "error": "registration_failed"})
+        raise HTTPException(status_code=500, detail="Registration attempt failed")
+
+
+# === Try Register SCNet Worker Function ===
+async def try_register() -> None:
+    """Function to attempt registering SCNet worker with main app in Session Manager if model is initialized"""
     if separator is None:
-        print("Model not initialized — skipping registration.")
-        return
+        logger.warning(action="registration_attempt", status="failed", data={"worker_id": worker_id, "status_code": 500, "error": "model_not_initialized"})
+        return  # skip the HTTP call until load_model completes
 
     worker_data = {
         "worker_id": worker_id,
         "model_type": model_type,
-        "address": address
+        "worker_address": worker_address,
     }
 
     try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            await client.post(f"http://{main_app_address}/register_worker", json=worker_data)
-            print("Successfully registered with main service.")
-    except Exception:
-        print("Main app not running yet — will wait for it to call /register_request later")
+        async with httpx.AsyncClient(timeout=10) as client: # HTTP client with timeout
+            response = await client.post(f"http://{app_address}/register_worker", json=worker_data) # Send registration request to main app
+        if response.status_code == 200:
+            logger.info(action="registration_attempt", status="success", data={"worker_id": worker_id, "model_type": model_type, "address": worker_address})
+        else:
+            logger.warning(action="registration_attempt", status="failed", data={"worker_id": worker_id, "status_code": response.status_code, "error": response.text})
+    
+    except Exception as e:
+        logger.warning(action="registration_attempt", status="failed", data={"worker_id": worker_id, "status_code": 500, "error": str(e)})

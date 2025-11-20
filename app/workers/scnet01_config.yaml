@@ -1,4 +1,4 @@
 worker_id: scnet01
 model_type: scnet
-main_app_address: 127.0.0.1:8000
-address: 127.0.0.1:8101
+app_address: 127.0.0.1:8000
+worker_address: 127.0.0.1:8100
