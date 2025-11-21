@@ -12,9 +12,9 @@ music_source_separation_service is a lightweight FastAPI service for performing 
 git clone https://github.com/jksikora/music_source_separation_service.git
 cd music_source_separation_service
 ```
-2. create **.venv** with python3.12
+2. create **.venv** with python3.10
 ```bash
-python3.12 -m venv venv
+python3.10 -m venv venv
 source venv/bin/activate # linux/macOS
 venv\Scripts\activate # windows
 ```
@@ -22,8 +22,8 @@ venv\Scripts\activate # windows
 ```bash
 pip install -r requirements.txt
 ```
-4. configurate **main** and **scnet_worker** ports
-```python
+4. configurate **main** and **scnet_worker** ports in the file: app/workers/**scnet01_config.yaml**
+```yaml
 worker_id: scnet01
 model_type: scnet
 main_address: 127.0.0.1:8000 # configurate main_address
