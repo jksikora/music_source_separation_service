@@ -26,7 +26,7 @@ pip install -r requirements.txt
 ```python
 worker_id: scnet01
 model_type: scnet
-app_address: 127.0.0.1:8000 # configurate app_address
+main_address: 127.0.0.1:8000 # configurate main_address
 worker_address: 127.0.0.1:8100 # configurate worker_address
 ```
 5. run the **main** service
