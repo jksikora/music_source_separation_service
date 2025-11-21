@@ -29,7 +29,7 @@ except (FileNotFoundError, ValueError) as exc:
 
 worker_id = worker_config.worker_id
 model_type = worker_config.model_type
-app_address = worker_config.app_address
+main_address = worker_config.main_address
 worker_address = worker_config.worker_address
 
 
@@ -116,7 +116,7 @@ async def try_register() -> None:
 
     try:
         async with httpx.AsyncClient(timeout=10) as client: # HTTP client with timeout
-            response = await client.post(f"http://{app_address}/register_worker", json=worker_data) # Send registration request to main app
+            response = await client.post(f"http://{main_address}/register_worker", json=worker_data) # Send registration request to main app
         if response.status_code == 200:
             logger.info(action="registration_attempt", status="success", data={"worker_id": worker_id, "model_type": model_type, "address": worker_address})
         else:

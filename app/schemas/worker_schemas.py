@@ -9,5 +9,5 @@ class WorkerData(BaseModel): # Information about each registered worker
 class WorkerConfig(BaseModel): # Configuration for worker setup
     worker_id: str
     model_type: str
-    app_address: str
+    main_address: str
     worker_address: str
