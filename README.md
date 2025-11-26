@@ -22,12 +22,12 @@ venv\Scripts\activate # windows
 ```bash
 pip install -r requirements.txt
 ```
-4. configurate **main** and **scnet_worker** ports in the file: app/workers/**scnet01_config.yaml**
+4. configurate **scnet_worker** and **main** ports in the file: app/workers/**scnet01_config.yaml**
 ```yaml
 worker_id: scnet01
 model_type: scnet
-main_address: 127.0.0.1:8000 # configurate main_address
 worker_address: 127.0.0.1:8100 # configurate worker_address
+main_address: 127.0.0.1:8000 # configurate main_address
 ```
 5. run the **main** service
 ```bash
