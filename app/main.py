@@ -17,7 +17,7 @@ logger = get_logger(__name__)  # Logger for main module
 @app.on_event("startup")
 async def check_workers() -> None:
     """On startup check if SCNet worker config file exists and attempt registration on startup"""
-    asyncio.create_task(try_register_request())
+    asyncio.create_task(try_register_request("scnet", 1))
 
 
 # === Homepage Endpoint ===
@@ -43,10 +43,10 @@ async def register_worker(worker_data: Worker) -> None:
 
 
 # === Try Register SCNet Worker Function ===
-async def try_register_request() -> None:
+async def try_register_request(model: str, serial_number: int) -> None:
     """Function to attempt registering SCNet worker in Session Manager if config file exists"""
     try:
-        worker_config = load_worker_config()
+        worker_config = load_worker_config(model, serial_number)
     except (FileNotFoundError, ValueError) as exc:
         logger.warning(action="registration_request", status="failed", data={"error": "invalid_worker_config", "details": str(exc)})
         return

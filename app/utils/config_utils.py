@@ -3,9 +3,9 @@ from pathlib import Path
 import yaml
 
 # === Load Worker Configuration Function ===
-def load_worker_config(config_filename: str = "scnet01_config.yaml") -> WorkerConfig:
+def load_worker_config(model: str, serial_number: int) -> WorkerConfig:
     """Function to check if the YAML configuration file exists and load it"""
-    config_path = Path(__file__).resolve().parents[1] / "workers" / config_filename # Path to worker config file
+    config_path = Path(__file__).resolve().parents[1] / "workers" / model / f"{model}{serial_number}_config.yaml" # Path to worker config file
     if not config_path.exists():
         raise FileNotFoundError(f"Missing worker configuration file at {config_path}") # Raise error if config file does not exist
 

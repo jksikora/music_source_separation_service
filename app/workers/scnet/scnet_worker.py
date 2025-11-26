@@ -1,6 +1,6 @@
 from fastapi import FastAPI, UploadFile, HTTPException
 from fastapi.responses import StreamingResponse
-from app.workers.scnet_model import scnet_model
+from app.workers.scnet.scnet_model import scnet_model
 from app.utils.config_utils import load_worker_config
 from app.utils.worker_utils import validate_outputs, zipstream_generator
 from app.utils.logging_utils import setup_logging, get_logger
@@ -14,7 +14,7 @@ logger = get_logger(__name__) # Logger for SCNet Worker
 
 # === Worker Configuration Loaded from YAML File ===
 try:
-    worker_config = load_worker_config()
+    worker_config = load_worker_config("scnet", 1)
 except (FileNotFoundError, ValueError) as exc:
     logger.error(action="config_loading", status="failed", data={"error": "invalid_worker_config", "details": str(exc)})
     raise RuntimeError("Loading worker configuration failed") from exc # Raise error if config file is missing or invalid, from exc chains the original exception to the new one
