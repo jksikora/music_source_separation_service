@@ -22,7 +22,7 @@ venv\Scripts\activate # windows
 ```bash
 pip install -r requirements.txt
 ```
-4. configurate **scnet_worker** and **main** ports in the file: app/workers/**scnet01_config.yaml**
+4. configurate **scnet_worker** and **main** ports in the file: app/workers/scnet/**scnet01_config.yaml**
 ```yaml
 worker_id: scnet01
 model_type: scnet
