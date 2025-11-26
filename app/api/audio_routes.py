@@ -3,15 +3,15 @@ from fastapi.responses import StreamingResponse
 from app.utils.audio_utils import convert_to_audio_buffer, buffer_generator, music_source_separation
 from app.utils.logging_utils import get_logger
 from app.services.storage import storage
-from app.schemas.audio_schemas import StemData
+from app.schemas.audio_schemas import AudioEntry
 
 router = APIRouter() # Create API router for audio routes
 logger = get_logger(__name__) # Logger for audio_routes module
 
 
 # === Upload Audio Endpoint ===
-@router.post("/upload_audio", response_model=dict[str, StemData])
-async def upload_audio(result: dict[str, StemData] = Depends(music_source_separation)) -> dict[str, StemData]:
+@router.post("/upload_audio", response_model=dict[str, AudioEntry])
+async def upload_audio(result: dict[str, AudioEntry] = Depends(music_source_separation)) -> dict[str, AudioEntry]:
     """Endpoint to upload audio file for music source separation; The response model enforces the contract returned by the dependency result"""
     return result
 

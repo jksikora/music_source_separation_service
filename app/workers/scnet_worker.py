@@ -22,16 +22,15 @@ inference_lock = asyncio.Lock() # Initialize lock on startup to serialize infere
 
 # === Worker Configuration Loaded from YAML File ===
 try:
-    worker_config = load_worker_config()
+    worker_data = load_worker_config()
 except (FileNotFoundError, ValueError) as exc:
-    logger.error(action="config_loading", status="failed", data={"error": "invalid_worker_config", "details": str(exc)})
+    logger.error(action="config_loading", status="failed", data={"error": "invalid_worker_data", "details": str(exc)})
     raise RuntimeError("Loading worker configuration failed") from exc # Raise error if config file is missing or invalid, from exc chains the original exception to the new one
 
-worker_id = worker_config.worker_id
-model_type = worker_config.model_type
-main_address = worker_config.main_address
-worker_address = worker_config.worker_address
-
+worker_id = worker_data.worker_id
+model_type = worker_data.model_type
+main_address = worker_data.main_address
+worker_address = worker_data.worker_address
 
 # === Startup Event ===
 @app.on_event("startup")

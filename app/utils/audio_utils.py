@@ -1,7 +1,7 @@
 from fastapi import File, UploadFile, HTTPException, Depends
 from app.services.storage import storage
 from app.services.session_manager import session_manager
-from app.schemas.audio_schemas import AudioData, StemData
+from app.schemas.audio_schemas import AudioData, AudioEntry
 from app.utils.logging_utils import get_logger
 from pathlib import Path
 import soundfile as sf
@@ -59,7 +59,7 @@ def buffer_generator(buffer: io.BytesIO, chunk_size: int = 256 * 1024) -> Genera
 
 
 # === Perform Music Source Separation Using Available SCNet Worker Function ===
-async def music_source_separation(audiofile: dict = Depends(audio_file_verification)) -> dict[str, StemData]:
+async def music_source_separation(audiofile: dict = Depends(audio_file_verification)) -> dict[str, AudioEntry]:
     """Function to perform music source separation using an available SCNet worker"""
     file = audiofile["file"]
     waveform = audiofile["waveform"]
@@ -111,9 +111,8 @@ async def music_source_separation(audiofile: dict = Depends(audio_file_verificat
                     await storage.save(stem_file_id, audio_data) # Save stem audio data in storage
                     logger.info(action="audio_save", status="success", data={"file_id": stem_file_id, "filename": filename})
 
-                    result[stem_name] = StemData( # Store separation result for the stem
+                    result[stem_name] = AudioEntry( # Store separation result for the stem
                         file_id=stem_file_id,
-                        filename=filename,
                         download_url=f"/download_audio/{stem_file_id}"
                     )
 

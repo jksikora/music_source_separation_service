@@ -1,0 +1,1 @@
+# performance means non-functional tests: latency, throughput, memory; here speed of separation is tested
