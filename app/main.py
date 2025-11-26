@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from app.api.audio_routes import router as audio_router
 from app.services.session_manager import session_manager
-from app.schemas.worker_schemas import WorkerData
+from app.schemas.worker_schemas import Worker
 from app.utils.config_utils import load_worker_config
 from app.utils.logging_utils import setup_logging, get_logger
 import asyncio, httpx
@@ -28,7 +28,7 @@ async def root() -> dict[str, str]:
 
 # === Register Worker Endpoint ===
 @app.post("/register_worker")
-async def register_worker(worker_data: WorkerData) -> None:
+async def register_worker(worker_data: Worker) -> None:
     """Endpoint for workers to register themselves in Session Manager"""
     try:
         await session_manager.register_worker(

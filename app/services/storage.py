@@ -39,12 +39,12 @@ class Storage(StorageInterface):
         self._logger = get_logger(__name__) # Logger for storage
         self._expiration_time_sec: float = 10*60  # Expiration time for stored files in seconds (10 minutes)
     
-    async def save(self, file_id: str, audio_data: AudioData) -> None:
+    async def save(self, file_id: str, filename: str, waveform: object, sample_rate: int) -> None:
         """Function to save audio data in storage"""
         async with self._lock: # Acquire lock for thread-safe operation
             await self._cleanup() # Remove expired files before inserting new one
-            self._storage[file_id] = audio_data 
-            self._logger.info(action="audio_save", status="in progress", data={"file_id": file_id, "filename": audio_data.filename}) 
+            self._storage[file_id] = AudioData(filename=filename, waveform=waveform, sample_rate=sample_rate)
+            self._logger.info(action="audio_save", status="in progress", data={"file_id": file_id, "filename": filename}) 
     
     async def get(self, file_id: str) -> AudioData | None:
         """Function to get audio data from storage"""

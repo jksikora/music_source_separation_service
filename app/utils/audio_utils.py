@@ -102,17 +102,12 @@ async def music_source_separation(audiofile: dict = Depends(audio_file_verificat
                     stem_file_id = f"{stem_name}_{file_id}" # Unique file ID for the stem
                     filename = f"{stem_name}_{file.filename}" # Filename for the stem
 
-                    audio_data = AudioData( # Create AudioData instance for the stem
-                        filename=filename,
-                        waveform=output_waveform,
-                        sample_rate=output_sample_rate
-                    )
-
-                    await storage.save(stem_file_id, audio_data) # Save stem audio data in storage
+                    await storage.save(stem_file_id, filename, output_waveform, output_sample_rate) # Save stem audio data in storage
                     logger.info(action="audio_save", status="success", data={"file_id": stem_file_id, "filename": filename})
 
                     result[stem_name] = AudioEntry( # Store separation result for the stem
                         file_id=stem_file_id,
+                        filename=filename,
                         download_url=f"/download_audio/{stem_file_id}"
                     )
 

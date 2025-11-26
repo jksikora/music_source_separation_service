@@ -12,7 +12,7 @@ def load_worker_config(config_filename: str = "scnet01_config.yaml") -> WorkerCo
     with open(config_path, "r", encoding="utf-8") as f: # Open SCNet worker config file using UTF-8 encoding for compatibility with different systems
         data = yaml.safe_load(f) or {} # Load YAML content safely, return empty dict if file is empty so the check below works correctly
 
-    required_fields = ("worker_id", "model_type", "main_address", "worker_address") # Define required fields for worker configuration
+    required_fields = ("worker_id", "model_type", "worker_address", "main_address") # Define required fields for worker configuration
     missing = [k for k in required_fields if not data.get(k)] # Check for missing or empty required fields
     if missing:
         raise ValueError(f"Missing or empty fields ({', '.join(missing)}) in {config_path}") # Raise error if any required field is missing or empty
