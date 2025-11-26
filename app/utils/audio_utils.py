@@ -1,18 +1,18 @@
 from fastapi import File, UploadFile, HTTPException, Depends
 from app.services.storage import storage
 from app.services.session_manager import session_manager
-from app.schemas.audio_schemas import AudioData, AudioEntry
+from app.schemas.audio_schemas import AudioEntry
+from app.schemas.worker_schemas import WorkerConfig
 from app.utils.logging_utils import get_logger
 from pathlib import Path
 import soundfile as sf
-from typing import Generator
 import io, torchaudio, httpx, zipfile, uuid
 
 logger = get_logger(__name__) # Logger for audio_utils module
 
 
 # === Verify Uploaded Audio File and Load Waveform Function ===
-async def audio_file_verification(file: UploadFile = File(...)) -> dict:
+async def _audio_file_verification(file: UploadFile = File(...)) -> dict:
     """Function to verify if the uploaded file is a valid audio file and load its waveform"""
     try:
         audio_bytes = await file.read() # Read uploaded audio file bytes
@@ -31,35 +31,56 @@ async def audio_file_verification(file: UploadFile = File(...)) -> dict:
     }
 
 
-# === Convert torch.Tensor (waveform) to an Audio Buffer ===
-def convert_to_audio_buffer(waveform: object, sample_rate: int, filename: str) -> tuple[io.BytesIO, int, str]:
-    """Function to convert a waveform tensor to an audio buffer in WAV format for streaming purpose"""
-    save_buffer = io.BytesIO() # Buffer to save the audio data, NOT ASYNC I/O
-    sf.write(save_buffer, waveform, sample_rate, format="WAV") # Save audio data to buffer in WAV format; Optional, subtype="PCM_16"
-    save_buffer.seek(0) # Reset buffer pointer to the beginning
-    size = save_buffer.getbuffer().nbytes # Get size of the buffer
+# === Get Inference Result from SCNet Worker Function ===
+async def _get_result(worker: WorkerConfig, waveform: object, sample_rate: int, filename: str) -> io.BytesIO:
+    audio_buffer = io.BytesIO() # Create in-memory buffer for audio data
+    sf.write(audio_buffer, waveform.T, sample_rate, format="WAV") # Write waveform to buffer in WAV format
+    audio_buffer.seek(0) # Reset buffer pointer to the beginning
 
-    download_filename = filename if filename.lower().endswith(".wav") else f"{filename}.wav" # Ensure filename ends with .wav
-    logger.debug(action="buffer_conversion", status="success", data={"filename": download_filename, "size": size, "sample_rate": sample_rate})
-    return save_buffer, size, download_filename
+    async with httpx.AsyncClient(timeout=None) as client:  # HTTP client with no timeout
+        files = {"file": (filename, audio_buffer, "audio/wav")}  # Prepare file for upload
+        response = await client.post(f"http://{worker.worker_address}/{worker.worker_id}/inference", files=files)  # Send inference request to SCNet worker
+    if response.status_code == 200:
+        logger.info(action="inference_request", status="success", data={"filename": filename, "worker_id": worker.worker_id, "address": worker.worker_address})
+    else:
+        logger.error(action="inference_request", status="failed", data={"worker_id": worker.worker_id, "status_code": response.status_code, "error": response.text})
+        raise HTTPException(status_code=response.status_code, detail=response.text)
+    
+    return io.BytesIO(response.content)  # In-memory buffer for received ZIP file
 
 
-# === Stream Buffer in Specified Size Chunks Function ===
-def buffer_generator(buffer: io.BytesIO, chunk_size: int = 256 * 1024) -> Generator[bytes, None, None]:  # 256 KB
-    """Function to yield chunks of data from a buffer for streaming in download endpoint"""
-    buffer.seek(0)  # Reset buffer pointer to the beginning
-    total = 0
-    while True:
-        chunk = buffer.read(chunk_size) # Read chunk of data
-        if not chunk:
-            break
-        total += len(chunk)
-        yield chunk
-    logger.debug(action="buffer_streaming", status="success", data={"total_size": total})
+# === Process Inference Result from SCNet Worker Function ===
+async def _process_result(result_zip: io.BytesIO, filename: str) -> dict[str, AudioEntry]:
+    with zipfile.ZipFile(result_zip, "r") as zip:  # Open ZIP file from buffer
+            file_id = str(uuid.uuid4())  # Generate unique ID for the original file
+            result = {}  # Dictionary to hold separation results
+            entries = ', '.join(zip.namelist()) or 'none' # Prepare entries for logging; handles empty ZIP case
+            logger.info(action="inference_reception", status="success", data={"filename": filename, "file_id": file_id, "entries": entries})
+
+            for name in zip.namelist(): # Iterate over files in the ZIP
+                with zip.open(name) as f: # Open each file in the ZIP
+                    audio_bytes = f.read() # Read audio file bytes
+                    buffer = io.BytesIO(audio_bytes) # Create in-memory buffer for audio data
+                    output_waveform, output_sample_rate = sf.read(buffer, dtype="float32") # Read audio data from buffer
+
+                    stem_name = Path(name).stem # Get stem name without extension
+                    stem_file_id = f"{stem_name}_{file_id}" # Unique file ID for the stem
+                    filename = f"{stem_name}_{filename}" # Filename for the stem
+
+                    await storage.save(stem_file_id, filename, output_waveform, output_sample_rate) # Save stem audio data in storage
+                    logger.info(action="audio_save", status="success", data={"file_id": stem_file_id, "filename": filename})
+
+                    result[stem_name] = AudioEntry( # Store separation result for the stem
+                        file_id=stem_file_id,
+                        filename=filename,
+                        download_url=f"/download_audio/{stem_file_id}"
+                    )
+
+            return result
 
 
 # === Perform Music Source Separation Using Available SCNet Worker Function ===
-async def music_source_separation(audiofile: dict = Depends(audio_file_verification)) -> dict[str, AudioEntry]:
+async def music_source_separation(audiofile: dict = Depends(_audio_file_verification)) -> dict[str, AudioEntry]:
     """Function to perform music source separation using an available SCNet worker"""
     file = audiofile["file"]
     waveform = audiofile["waveform"]
@@ -72,46 +93,13 @@ async def music_source_separation(audiofile: dict = Depends(audio_file_verificat
     logger.info(action="worker_acquisition", status="success", data={"worker_id": worker.worker_id, "model_type": worker.model_type})
     
     try:
-        audio_buffer = io.BytesIO() # Create in-memory buffer for audio data
-        sf.write(audio_buffer, waveform.T, sample_rate, format="WAV") # Write waveform to buffer in WAV format
-        audio_buffer.seek(0) # Reset buffer pointer to the beginning
-
-        async with httpx.AsyncClient(timeout=None) as client:  # HTTP client with no timeout
-            files = {"file": (file.filename, audio_buffer, "audio/wav")}  # Prepare file for upload
-            response = await client.post(f"http://{worker.worker_address}/{worker.worker_id}/inference", files=files)  # Send inference request to SCNet worker
-        if response.status_code == 200:
-            logger.info(action="inference_request", status="success", data={"filename": file.filename, "worker_id": worker.worker_id, "address": worker.worker_address})
-        else:
-            logger.error(action="inference_request", status="failed", data={"worker_id": worker.worker_id, "status_code": response.status_code, "error": response.text})
-            raise HTTPException(status_code=response.status_code, detail=response.text)
-
-        result_zip = io.BytesIO(response.content)  # In-memory buffer for received ZIP file
-        with zipfile.ZipFile(result_zip, "r") as zip:  # Open ZIP file from buffer
-            file_id = str(uuid.uuid4())  # Generate unique ID for the original file
-            result = {}  # Dictionary to hold separation results
-            entries = ', '.join(zip.namelist()) or 'none' # Prepare entries for logging; handles empty ZIP case
-            logger.info(action="inference_reception", status="success", data={"filename": file.filename, "file_id": file_id, "entries": entries})
-
-            for name in zip.namelist(): # Iterate over files in the ZIP
-                with zip.open(name) as f: # Open each file in the ZIP
-                    audio_bytes = f.read() # Read audio file bytes
-                    buffer = io.BytesIO(audio_bytes) # Create in-memory buffer for audio data
-                    output_waveform, output_sample_rate = sf.read(buffer, dtype="float32") # Read audio data from buffer
-
-                    stem_name = Path(name).stem # Get stem name without extension
-                    stem_file_id = f"{stem_name}_{file_id}" # Unique file ID for the stem
-                    filename = f"{stem_name}_{file.filename}" # Filename for the stem
-
-                    await storage.save(stem_file_id, filename, output_waveform, output_sample_rate) # Save stem audio data in storage
-                    logger.info(action="audio_save", status="success", data={"file_id": stem_file_id, "filename": filename})
-
-                    result[stem_name] = AudioEntry( # Store separation result for the stem
-                        file_id=stem_file_id,
-                        filename=filename,
-                        download_url=f"/download_audio/{stem_file_id}"
-                    )
-
+        result_zip = await _get_result(worker, waveform, sample_rate, file.filename)
+        result = await _process_result(result_zip, file.filename)  # Process the received ZIP file
+        if not result or not result_zip:
+            logger.warning(action="separation_completion", status="failed", data={"filename": file.filename, "error": "no_stems_extracted"})
+            raise HTTPException(status_code=500, detail="No stems extracted from the audio file")
         logger.info(action="separation_completion", status="success", data={"filename": file.filename, "num_stems": len(result)})
+
         return result
         
     finally:

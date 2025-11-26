@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from app.utils.audio_utils import convert_to_audio_buffer, buffer_generator, music_source_separation
+from app.utils.audio_utils import music_source_separation
+from app.utils.streaming_utils import convert_to_audio_buffer, buffer_generator
 from app.utils.logging_utils import get_logger
 from app.services.storage import storage
 from app.schemas.audio_schemas import AudioEntry

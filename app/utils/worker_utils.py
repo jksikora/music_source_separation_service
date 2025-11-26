@@ -9,6 +9,19 @@ import io
 logger = get_logger(__name__) # Logger for main module
 
 
+# === Helper Buffer Generator Function ===
+def _buffer_generator(waveform: np.ndarray, sample_rate: int, chunk_size: int = 256 * 1024) -> Generator[bytes, None, None]:
+    """Helper function to yield WAV-encoded chunks without loading entire response in memory"""
+    buffer = io.BytesIO()
+    sf.write(buffer, waveform, sample_rate, format="WAV")
+    buffer.seek(0)
+    while True:
+        chunk = buffer.read(chunk_size)
+        if not chunk:
+            break
+        yield chunk
+
+
 # === Validate Inference Outputs Function ===
 def validate_outputs(output_waveforms: dict[str, np.ndarray], output_sample_rates: dict[str, int], worker_id: str, filename: str) -> None:
     """Function to validate that inference outputs contain non-empty waveforms and matching sample rates"""
@@ -45,16 +58,3 @@ def zipstream_generator(waveforms: dict[str, np.ndarray], sample_rates: dict[str
 
     headers = {"Content-Disposition": f'attachment; filename="{filename}_separated_stems.zip"'}
     return zipstream, headers
-
-
-# === Helper Buffer Generator Function ===
-def _buffer_generator(waveform: np.ndarray, sample_rate: int, chunk_size: int = 256 * 1024) -> Generator[bytes, None, None]:
-    """Helper function to yield WAV-encoded chunks without loading entire response in memory"""
-    buffer = io.BytesIO()
-    sf.write(buffer, waveform, sample_rate, format="WAV")
-    buffer.seek(0)
-    while True:
-        chunk = buffer.read(chunk_size)
-        if not chunk:
-            break
-        yield chunk
