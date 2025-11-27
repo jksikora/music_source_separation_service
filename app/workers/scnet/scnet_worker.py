@@ -1,6 +1,6 @@
 from fastapi import FastAPI, UploadFile, HTTPException
 from fastapi.responses import StreamingResponse
-from app.workers.scnet.scnet_model import scnet_model
+from app.workers.scnet.scnet_model import SCNetModel
 from contextlib import asynccontextmanager
 from app.utils.config_utils import load_worker_config
 from app.utils.worker_utils import validate_outputs, zipstream_generator
@@ -11,6 +11,8 @@ import httpx
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """On startup load SCNet model and try registering worker"""
+    global scnet_model
+    scnet_model = SCNetModel()
     await scnet_model.load_model(worker_id, model_type) # Load SCNet model on startup
     await try_register()
     yield # Pauses here; Code after yield runs on shutdown

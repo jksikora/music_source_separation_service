@@ -1,5 +1,6 @@
 from app.services.storage import storage
 from unittest.mock import patch
+import numpy as np
 import pytest, io, torchaudio, asyncio, time
 
 # --- Endpoint tests ---
@@ -36,11 +37,13 @@ def test_download_audio(client, sample_audio_file):
     5. Check the downloaded audio's sample rate matches the original"""
 
     audio_bytes, sample_rate, format = sample_audio_file
+    original_waveform, _ = torchaudio.load(io.BytesIO(audio_bytes))
     files = {'file': (f'test.{format.lower()}', audio_bytes, f'audio/{format.lower()}')} #Preparing file for upload (name, content, mime type)
     upload_response = client.post("/upload_audio", files=files)
     assert upload_response.status_code == 200, f"Unexpected status code: {upload_response.status_code}" #Check if upload response status code is 200
     data = upload_response.json()
 
+    stem_waveforms = []
     for stem_name, stem_info in data.items(): # Check if all stems can be downloaded and are valid audio files
         file_id = stem_info["file_id"]
         download_response = client.get(f"/download_audio/{file_id}") # Making GET request to the download_audio endpoint with the stem's file_id
@@ -51,9 +54,13 @@ def test_download_audio(client, sample_audio_file):
         buffer = io.BytesIO(download_response.content)
         downloaded_waveform, downloaded_sample_rate = torchaudio.load(buffer) # Load audio from the response content and verify if it's valid with torchaudio
         assert len(downloaded_waveform) > 0 and downloaded_waveform is not None, f"Downloaded audio for {stem_name} is empty or invalid" # Check if the waveform is not empty and is valid
-        assert len(downloaded_waveform) == len(torchaudio.load(audio_bytes)[0]), f"Downloaded audio length mismatch for {stem_name}: expected {len(torchaudio.load(audio_bytes)[0])}, got {len(downloaded_waveform)}"
-        assert downloaded_sample_rate > 0 and not None, f"Downloaded audio sample rate for {stem_name} is invalid"
+        assert len(downloaded_waveform) == len(original_waveform), f"Downloaded audio length mismatch for {stem_name}: expected {len(original_waveform)}, got {len(downloaded_waveform)}" # Check if the downloaded audio length matches the original
+        assert downloaded_sample_rate > 0 and not None, f"Downloaded audio sample rate for {stem_name} is invalid" # Check if the downloaded audio's sample rate is valid
         assert downloaded_sample_rate == sample_rate and not None, f"Sample rate mismatch for {stem_name}: expected {sample_rate}, got {downloaded_sample_rate}" # Check if the downloaded audio's sample rate matches the original
+        stem_waveforms.append(downloaded_waveform)
+    
+    print(f"\nMax difference: {np.max(np.abs(sum(stem_waveforms).numpy() - original_waveform.numpy()))}") # Tp see the maximum difference for debugging use "-s" after pytest command
+    assert np.allclose(sum(stem_waveforms).numpy(), original_waveform.numpy(), atol=0.3), "Sum of stems does not closely match original audio" # Check if the sum of all stems matches the original audio
 
 
 # === Test upload_audio endpoint with invalid file ===

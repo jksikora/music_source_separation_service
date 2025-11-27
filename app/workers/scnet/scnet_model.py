@@ -51,6 +51,3 @@ class SCNetModel:
           
         async with self.inference_lock: # Acquire lock to serialize inference requests
             return await asyncio.to_thread(self.separator.separate_music_file, waveform, sample_rate) # Perform inference in a separate thread
-
-
-scnet_model = SCNetModel() # Global SCNetModel instance for worker
