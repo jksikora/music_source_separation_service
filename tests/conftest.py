@@ -1,3 +1,4 @@
+from app.services.storage import storage
 import numpy as np
 import soundfile as sf
 import pytest, pytest_asyncio, io, httpx, yaml
@@ -26,7 +27,7 @@ async def async_client():
 
 # === Sample Audio File Fixture ===
 @pytest.fixture
-def sample_audio_file(request) -> tuple[bytes, int]:
+def sample_audio_file(request):
     """Generate a sample audio file (1 second of random noise) for simulating uploads"""
     format = request.param if hasattr(request, 'param') else 'WAV'  # Will default to 'wav' if no param is provided
     fs=44100
@@ -36,3 +37,14 @@ def sample_audio_file(request) -> tuple[bytes, int]:
     buffer.seek(0)
     
     return buffer.read(), fs, format
+
+
+# === Sample Audio File in Storage Fixture ===
+@pytest_asyncio.fixture
+async def sample_audio_file_in_storage(sample_audio_file):
+    """Save a sample audio file in storage for testing storage service"""
+    audio_bytes, sample_rate, _ = sample_audio_file
+    file_id = "test_file_id"
+    filename = f"test.wav"
+    await storage.save(file_id, filename, audio_bytes, sample_rate)
+    yield file_id

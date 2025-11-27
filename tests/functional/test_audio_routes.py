@@ -1,5 +1,6 @@
-import numpy as np
-import pytest, io, torchaudio, asyncio
+from app.services.storage import storage
+from unittest.mock import patch
+import pytest, io, torchaudio, asyncio, time
 
 # --- Endpoint tests ---
 
@@ -103,3 +104,23 @@ def test_download_audio_invalid_id(client):
     assert response.status_code == 404, f"Unexpected status code: {response.status_code}"
     data = response.json()
     assert data["detail"] == "File not found", f"Unexpected error message: {data['detail']}" #Check that the error message is as expected
+
+# --- Service tests ---
+
+# === Test storage cleanup function ===
+@pytest.mark.asyncio
+async def test_storage_cleanup(sample_audio_file_in_storage):
+    """Testing storage cleanup function to ensure expired files are deleted
+    1. Check that a saved file exists
+    2. Check that after expiration time the file is deleted by simulating expiration and triggering cleanup"""
+
+    file_id = sample_audio_file_in_storage
+    assert await storage.exists(file_id), "File is expected to exist in storage before expiration"
+
+    original_time = time.time()
+    expired_time = original_time + 10 * 60 + 1
+
+    with patch('time.time', return_value=expired_time): # Mock time.time to simulate expiration (10 minutes + 1 second later)
+        await storage._cleanup() # Cleanup must be triggered manually here because it is called during save operation
+
+    assert not await storage.exists(file_id), "File is expected to be deleted from storage after expiration"
