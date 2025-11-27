@@ -40,17 +40,17 @@ def test_download_audio(client, sample_audio_file):
     assert upload_response.status_code == 200, f"Unexpected status code: {upload_response.status_code}" #Check if upload response status code is 200
     data = upload_response.json()
 
-    first_stem_info = next(iter(data.values())) #Get info of the first stem
-    file_id = first_stem_info["file_id"]
-    download_response = client.get(f"/download_audio/{file_id}") #Making GET request to the download_audio endpoint with the stem's file_id
-    assert download_response.status_code == 200, f"Unexpected status code: {download_response.status_code}" #Check if download response status code is 200
-    assert download_response.headers["content-type"].lower() == "audio/wav", f"Unexpected content type: {download_response.headers['content-type']}" #Check if content type is audio/wav (case insensitive)
-    assert int(download_response.headers["content-length"]) > 0, "Downloaded file is empty" #Check that the response content is not empty 
+    for stem_name, stem_info in data.items(): # Check if all stems can be downloaded and are valid audio files
+        file_id = stem_info["file_id"]
+        download_response = client.get(f"/download_audio/{file_id}") # Making GET request to the download_audio endpoint with the stem's file_id
+        assert download_response.status_code == 200, f"Unexpected status code for {stem_name}: {download_response.status_code}" # Check if download response status code is 200
+        assert download_response.headers["content-type"].lower() == "audio/wav", f"Unexpected content type for {stem_name}: {download_response.headers['content-type']}" # Check if content type is audio/wav (case insensitive)
+        assert int(download_response.headers["content-length"]) > 0, f"Downloaded file for {stem_name} is empty" # Check if the response content is not empty 
 
-    buffer = io.BytesIO(download_response.content)
-    waveform, sample_rate = torchaudio.load(buffer) #Load audio from the response content and verify it's valid with torchaudio
-    assert len(waveform) > 0 and waveform is not None, "Downloaded audio is empty or invalid"  #Check that the waveform is valid
-    assert sample_rate == fs and sample_rate is not None, f"Sample rate mismatch: expected {fs}, got {sample_rate}" #Check that the downloaded audio's sample rate matches the original
+        buffer = io.BytesIO(download_response.content)
+        waveform, sample_rate = torchaudio.load(buffer) # Load audio from the response content and verify if it's valid with torchaudio
+        assert len(waveform) > 0 and waveform is not None, f"Downloaded audio for {stem_name} is empty or invalid" # Check if the waveform is not empty and is valid
+        assert sample_rate == fs and sample_rate is not None, f"Sample rate mismatch for {stem_name}: expected {fs}, got {sample_rate}" # Check if the downloaded audio's sample rate matches the original
 
 
 # === Test upload_audio endpoint with invalid file ===
