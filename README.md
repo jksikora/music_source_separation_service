@@ -59,8 +59,8 @@ service should generate:
 ### functional tests
 1. activate **.venv**
 ```bash
-source .venv/bin/activate # linux/macOS
-.venv\Scripts\Activate.ps1 # windows
+source venv/bin/activate # linux/macOS
+venv\Scripts\Activate.ps1 # windows
 ```
 2. run the **main** service
 ```bash
