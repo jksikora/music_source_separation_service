@@ -1,22 +1,26 @@
-from typing import Generator
-from fastapi.testclient import TestClient
-from app.main import app
-from app.services.storage import storage
-from app.services.session_manager import session_manager
 import numpy as np
 import soundfile as sf
-import pytest, io, httpx, yaml
+import pytest, pytest_asyncio, io, httpx, yaml
 
-# Load config to get main address
+# === Main Address Loaded from YAML File ===
 with open("app/workers/scnet/scnet1_config.yaml", "r") as f:
     config = yaml.safe_load(f)
 main_address = config["main_address"]  # e.g., "127.0.0.1:8000"
 
+
 # === Test Client Fixture ===
 @pytest.fixture
 def client():
-    """For each test create a different HTTP client to interact with the running FastAPI app on the configured address"""
+    """For each test create a different HTTP client to interact with the running FastAPI app (synchronously) on the configured address"""
     with httpx.Client(base_url=f"http://{main_address}") as client:
+        yield client
+
+
+# === Async Test Client Fixture ===
+@pytest_asyncio.fixture
+async def async_client():
+    """For each test create a different async HTTP client to interact with the running FastAPI app (asynchronously) on the configured address"""
+    async with httpx.AsyncClient(base_url=f"http://{main_address}") as client:
         yield client
 
 

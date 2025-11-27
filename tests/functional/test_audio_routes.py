@@ -1,5 +1,5 @@
 import numpy as np
-import pytest, io, torchaudio
+import pytest, io, torchaudio, asyncio
 
 # --- Endpoint tests ---
 
@@ -34,7 +34,7 @@ def test_download_audio(client, sample_audio_file):
     4. Check the response content is a valid audio file that can be loaded with torchaudio
     5. Check the downloaded audio's sample rate matches the original"""
 
-    audio_bytes, fs, format = sample_audio_file
+    audio_bytes, sample_rate, format = sample_audio_file
     files = {'file': (f'test.{format.lower()}', audio_bytes, f'audio/{format.lower()}')} #Preparing file for upload (name, content, mime type)
     upload_response = client.post("/upload_audio", files=files)
     assert upload_response.status_code == 200, f"Unexpected status code: {upload_response.status_code}" #Check if upload response status code is 200
@@ -48,9 +48,9 @@ def test_download_audio(client, sample_audio_file):
         assert int(download_response.headers["content-length"]) > 0, f"Downloaded file for {stem_name} is empty" # Check if the response content is not empty 
 
         buffer = io.BytesIO(download_response.content)
-        waveform, sample_rate = torchaudio.load(buffer) # Load audio from the response content and verify if it's valid with torchaudio
-        assert len(waveform) > 0 and waveform is not None, f"Downloaded audio for {stem_name} is empty or invalid" # Check if the waveform is not empty and is valid
-        assert sample_rate == fs and sample_rate is not None, f"Sample rate mismatch for {stem_name}: expected {fs}, got {sample_rate}" # Check if the downloaded audio's sample rate matches the original
+        downloaded_waveform, downloaded_sample_rate = torchaudio.load(buffer) # Load audio from the response content and verify if it's valid with torchaudio
+        assert len(downloaded_waveform) > 0 and downloaded_waveform is not None, f"Downloaded audio for {stem_name} is empty or invalid" # Check if the waveform is not empty and is valid
+        assert downloaded_sample_rate == sample_rate and downloaded_sample_rate is not None, f"Sample rate mismatch for {stem_name}: expected {sample_rate}, got {downloaded_sample_rate}" # Check if the downloaded audio's sample rate matches the original
 
 
 # === Test upload_audio endpoint with invalid file ===
@@ -63,7 +63,33 @@ def test_upload_audio_invalid_file(client):
     response = client.post("/upload_audio", files=files) #Making POST request with an invalid file
     assert response.status_code == 400, f"Unexpected status code: {response.status_code}"
     data = response.json()
-    assert data["detail"] == "Invalid audio file", "Unexpected error message" #Check that the error message is as expected
+    assert data["detail"] == "Invalid audio file", f"Unexpected error message: {data['detail']}" #Check that the error message is as expected
+
+
+# === Test upload_audio endpoint with concurrent uploads ===
+@pytest.mark.asyncio
+async def test_upload_audio_concurrent_uploads(async_client, sample_audio_file):
+    """Testing concurrent uploads to check if the system handles multiple requests properly
+    1. Send two uploads at the same time
+    2. Check if one upload succeeds and the other fails with expected error message"""
+    audio_bytes, _, _ = sample_audio_file
+    files = {'file': ('test.wav', audio_bytes, 'audio/wav')}
+    task1 = async_client.post("/upload_audio", files=files)
+    task2 = async_client.post("/upload_audio", files=files)
+    response1, response2 = await asyncio.gather(task1, task2) # Send two upload requests concurrently
+
+    statuses = {response1.status_code, response2.status_code}
+    assert statuses == {200, 503}, f"Unexpected statuses codes: expected one 200 and one 503, got {statuses}"
+
+    success_response = response1 if response1.status_code == 200 else response2 # The successful one should have all expected stems
+    success_data = success_response.json()
+    expected_stems = {"vocals", "drums", "bass", "other"}
+    for stem in expected_stems:
+        assert stem in success_data, f"Stem '{stem}' not found in successful response"
+
+    fail_response = response1 if response1.status_code == 503 else response2 # The failed one should have no_available_workers error
+    fail_data = fail_response.json()
+    assert fail_data['detail'] == "No available SCNet workers", f"Unexpected error message: {fail_data['detail']}"
 
 
 # === Test download_audio endpoint with invalid file_id ===
@@ -76,4 +102,4 @@ def test_download_audio_invalid_id(client):
     response = client.get(f"/download_audio/{invalid_file_id}") #Making GET request with an invalid file_id
     assert response.status_code == 404, f"Unexpected status code: {response.status_code}"
     data = response.json()
-    assert data["detail"] == "File not found", "Unexpected error message" #Check that the error message is as expected
+    assert data["detail"] == "File not found", f"Unexpected error message: {data['detail']}" #Check that the error message is as expected
