@@ -68,7 +68,7 @@ uvicorn app.main:app --port <MAIN_PORT_FROM_CONFIG>
 ```
 3. run the **scnet_worker** service (in another terminal)
 ```bash
-uvicorn app.workers.scnet_worker:app --port <WORKER_PORT_FROM_CONFIG>
+uvicorn app.workers.scnet.scnet_worker:app --port <WORKER_PORT_FROM_CONFIG>
 ```
 4. run **pytest** in the project’s root folder: music_source_separation_service/
 ```bash
