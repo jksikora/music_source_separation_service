@@ -25,10 +25,10 @@ async def async_client():
         yield client
 
 
-# === Sample Audio File Fixture ===
+# === Invalid Sample Audio File Fixture ===
 @pytest.fixture
 def sample_audio_file(request):
-    """Generate a sample audio file (1 second of random noise) for simulating uploads"""
+    """Generate an invalid sample audio file for simulating uploads with invalid data"""
     format = request.param if hasattr(request, 'param') else 'WAV'  # Will default to 'wav' if no param is provided
     fs=44100
     waveform = np.random.randn(fs).astype(np.float32) * 0.1 # 1 seconds of random audio noise (soundfile and torchaudio expect float32 format)
@@ -37,6 +37,34 @@ def sample_audio_file(request):
     buffer.seek(0)
     
     return buffer.read(), fs, format
+
+
+# === Sample Audio File Fixture ===
+@pytest.fixture
+def invalid_sample_audio_file(request):
+    """Generate a sample audio file (1 second of random noise) for simulating uploads"""
+    format = request.param if hasattr(request, 'param') else 'txt'  # Will default to 'txt' if no param is provided
+    filename = f"test.{format.lower()}"
+    data = b"Invalid file."
+    
+    if format == "txt":
+        return filename, data, "text/plain"
+    elif format in {"png", "jpg", "svg"}:
+        match format:
+            case "png":
+                return filename, data, "image/png"
+            case "jpg":
+                return filename, data, "image/jpeg"
+            case "svg":
+                return filename, data, "image/svg+xml"
+    elif format in {"mp4", "avi", "mov"}:
+        match format:
+            case "mp4":
+                return filename, data, "video/mp4"
+            case "avi":
+                return filename, data, "video/x-msvideo"
+            case "mov":
+                return filename, data, "video/quicktime"
 
 
 # === Sample Audio File in Storage Fixture ===

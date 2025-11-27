@@ -5,7 +5,7 @@ import pytest, io, torchaudio, asyncio, time
 # --- Endpoint tests ---
 
 # === Test upload_audio endpoint ===
-@pytest.mark.parametrize("sample_audio_file", ["WAV", "FLAC"], indirect=True) # Runs test for both "WAV" and "FLAC" formats; indirect=True tells pytest to pass the param to the fixture not the test function
+@pytest.mark.parametrize("sample_audio_file", ["WAV", "FLAC"], indirect=True) # Run test for both "WAV" and "FLAC" formats; indirect=True tells pytest to pass the param to the fixture not the test function
 def test_upload_audio(client, sample_audio_file):
     """Testing upload_audio endpoint for successful stem extraction
     1. Check the response status code is 200
@@ -26,7 +26,7 @@ def test_upload_audio(client, sample_audio_file):
 
 
 # === Test download_audio endpoint ===
-@pytest.mark.parametrize("sample_audio_file", ["WAV", "FLAC"], indirect=True) # Runs test for both "WAV" and "FLAC" formats; indirect=True tells pytest to pass the param to the fixture not the test function
+@pytest.mark.parametrize("sample_audio_file", ["WAV", "FLAC"], indirect=True) # Run test for both "WAV" and "FLAC" formats; indirect=True tells pytest to pass the param to the fixture not the test function
 def test_download_audio(client, sample_audio_file):
     """Testing download_audio endpoint for successful stem extraction
     1. Check the response status code for upload and download is 200
@@ -55,12 +55,14 @@ def test_download_audio(client, sample_audio_file):
 
 
 # === Test upload_audio endpoint with invalid file ===
-def test_upload_audio_invalid_file(client):
+@pytest.mark.parametrize("invalid_sample_audio_file", ["txt", "png", "jpg", "svg", "mp4", "avi", "mov"], indirect=True) # Run test for every format; indirect=True tells pytest to pass the param to the fixture not the test function
+def test_upload_audio_invalid_file(client, invalid_sample_audio_file):
     """Testing upload_audio endpoint with invalid file
      1. Check the response status code is 400
      2. Check the response JSON contains the expected error message"""
     
-    files = {'file': ('test.txt', b'Invalid file.', 'text/plain')} #Preparing a non-audio file for upload
+    filename, data, mime_type = invalid_sample_audio_file
+    files = {'file': (filename, data, mime_type)} #Preparing a non-audio file for upload
     response = client.post("/upload_audio", files=files) #Making POST request with an invalid file
     assert response.status_code == 400, f"Unexpected status code: {response.status_code}"
     data = response.json()
