@@ -1,1 +1,79 @@
-# user - level API tests
+import numpy as np
+import pytest, io, torchaudio
+
+# --- Endpoint tests ---
+
+# === Test upload_audio endpoint ===
+@pytest.mark.parametrize("sample_audio_file", ["WAV", "FLAC"], indirect=True) # Runs test for both "WAV" and "FLAC" formats; indirect=True tells pytest to pass the param to the fixture not the test function
+def test_upload_audio(client, sample_audio_file):
+    """Testing upload_audio endpoint for successful stem extraction
+    1. Check the response status code is 200
+    2. Check the response JSON contains expected stems and fields"""
+
+    audio_bytes, _, format = sample_audio_file
+    files = {'file': (f'test.{format.lower()}', audio_bytes, f'audio/{format.lower()}')} #Preparing file for upload (name, content, mime type)
+    upload_response = client.post("/upload_audio", files=files) #Making POST request to the upload_audio endpoint
+    assert upload_response.status_code == 200, f"Unexpected status code: {upload_response.status_code}" #Check if response status code is 200
+    data = upload_response.json() #Parsing JSON response (converts response body to Python dict)
+    
+    expected_stems = {"vocals", "drums", "bass", "other"}
+    for stem in expected_stems:
+        assert stem in data, f"Stem '{stem}' not found in response" #Check if each expected stem is in the result
+        stem_info = data[stem]
+        for field in ["file_id", "filename", "download_url"]:
+            assert field in stem_info, f"Field '{field}' missing in stem '{stem}' info" #Check if each expected field is in the stem info
+
+
+# === Test download_audio endpoint ===
+@pytest.mark.parametrize("sample_audio_file", ["WAV", "FLAC"], indirect=True) # Runs test for both "WAV" and "FLAC" formats; indirect=True tells pytest to pass the param to the fixture not the test function
+def test_download_audio(client, sample_audio_file):
+    """Testing download_audio endpoint for successful stem extraction
+    1. Check the response status code for upload and download is 200
+    2. Check the response content type is audio/wav
+    3. Check the response content is not empty
+    4. Check the response content is a valid audio file that can be loaded with torchaudio
+    5. Check the downloaded audio's sample rate matches the original"""
+
+    audio_bytes, fs, format = sample_audio_file
+    files = {'file': (f'test.{format.lower()}', audio_bytes, f'audio/{format.lower()}')} #Preparing file for upload (name, content, mime type)
+    upload_response = client.post("/upload_audio", files=files)
+    assert upload_response.status_code == 200, f"Unexpected status code: {upload_response.status_code}" #Check if upload response status code is 200
+    data = upload_response.json()
+
+    first_stem_info = next(iter(data.values())) #Get info of the first stem
+    file_id = first_stem_info["file_id"]
+    download_response = client.get(f"/download_audio/{file_id}") #Making GET request to the download_audio endpoint with the stem's file_id
+    assert download_response.status_code == 200, f"Unexpected status code: {download_response.status_code}" #Check if download response status code is 200
+    assert download_response.headers["content-type"].lower() == "audio/wav", f"Unexpected content type: {download_response.headers['content-type']}" #Check if content type is audio/wav (case insensitive)
+    assert int(download_response.headers["content-length"]) > 0, "Downloaded file is empty" #Check that the response content is not empty 
+
+    buffer = io.BytesIO(download_response.content)
+    waveform, sample_rate = torchaudio.load(buffer) #Load audio from the response content and verify it's valid with torchaudio
+    assert len(waveform) > 0 and waveform is not None, "Downloaded audio is empty or invalid"  #Check that the waveform is valid
+    assert sample_rate == fs and sample_rate is not None, f"Sample rate mismatch: expected {fs}, got {sample_rate}" #Check that the downloaded audio's sample rate matches the original
+
+
+# === Test upload_audio endpoint with invalid file ===
+def test_upload_audio_invalid_file(client):
+    """Testing upload_audio endpoint with invalid file
+     1. Check the response status code is 400
+     2. Check the response JSON contains the expected error message"""
+    
+    files = {'file': ('test.txt', b'Invalid file.', 'text/plain')} #Preparing a non-audio file for upload
+    response = client.post("/upload_audio", files=files) #Making POST request with an invalid file
+    assert response.status_code == 400, f"Unexpected status code: {response.status_code}"
+    data = response.json()
+    assert data["detail"] == "Invalid audio file", "Unexpected error message" #Check that the error message is as expected
+
+
+# === Test download_audio endpoint with invalid file_id ===
+def test_download_audio_invalid_id(client):
+    """Testing download_audio endpoint with invalid file_id
+     1. Check the response status code is 404
+     2. Check the response JSON contains the expected error message"""
+    
+    invalid_file_id = "non_existent_file_id"
+    response = client.get(f"/download_audio/{invalid_file_id}") #Making GET request with an invalid file_id
+    assert response.status_code == 404, f"Unexpected status code: {response.status_code}"
+    data = response.json()
+    assert data["detail"] == "File not found", "Unexpected error message" #Check that the error message is as expected

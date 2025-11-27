@@ -2,22 +2,24 @@ from fastapi import FastAPI, HTTPException
 from app.api.audio_routes import router as audio_router
 from app.services.session_manager import session_manager
 from app.schemas.worker_schemas import Worker
+from contextlib import asynccontextmanager
 from app.utils.config_utils import load_worker_config
 from app.utils.logging_utils import setup_logging, get_logger
 import asyncio, httpx
 
-app = FastAPI(title = "Music Source Separation Service")
+# === Lifespan Event ===
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """On startup check if SCNet worker config file exists and attempt registration"""
+    asyncio.create_task(try_register_request("scnet", 1)) # Attempt to register SCNet worker on startup
+    yield # Pauses here; Code after yield runs on shutdown
+
+
+app = FastAPI(title = "Music Source Separation Service", lifespan=lifespan)
 
 app.include_router(audio_router) # Include audio processing API routes
 setup_logging() # Setup logging configuration
 logger = get_logger(__name__)  # Logger for main module
-
-
-# === Startup Event ===
-@app.on_event("startup")
-async def check_workers() -> None:
-    """On startup check if SCNet worker config file exists and attempt registration on startup"""
-    asyncio.create_task(try_register_request("scnet", 1))
 
 
 # === Homepage Endpoint ===

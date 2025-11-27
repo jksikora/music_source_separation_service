@@ -1,12 +1,22 @@
 from fastapi import FastAPI, UploadFile, HTTPException
 from fastapi.responses import StreamingResponse
 from app.workers.scnet.scnet_model import scnet_model
+from contextlib import asynccontextmanager
 from app.utils.config_utils import load_worker_config
 from app.utils.worker_utils import validate_outputs, zipstream_generator
 from app.utils.logging_utils import setup_logging, get_logger
 import httpx 
 
-app = FastAPI(title = "SCNetWorker")
+# === Lifespan Event ===
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """On startup load SCNet model and try registering worker"""
+    await scnet_model.load_model(worker_id, model_type) # Load SCNet model on startup
+    await try_register()
+    yield # Pauses here; Code after yield runs on shutdown
+
+
+app = FastAPI(title = "SCNetWorker", lifespan=lifespan)
 
 setup_logging() # Setup logging configuration
 logger = get_logger(__name__) # Logger for SCNet Worker
@@ -23,13 +33,6 @@ worker_id = worker_config.worker_id
 model_type = worker_config.model_type
 main_address = worker_config.main_address
 worker_address = worker_config.worker_address
-
-# === Startup Event ===
-@app.on_event("startup")
-async def load_model() -> None:
-    """On startup load SCNet model and try registering worker"""
-    await scnet_model.load_model(worker_id, model_type)
-    await try_register()
 
 
 # === Inference Endpoint ===
