@@ -51,7 +51,9 @@ def test_download_audio(client, sample_audio_file):
         buffer = io.BytesIO(download_response.content)
         downloaded_waveform, downloaded_sample_rate = torchaudio.load(buffer) # Load audio from the response content and verify if it's valid with torchaudio
         assert len(downloaded_waveform) > 0 and downloaded_waveform is not None, f"Downloaded audio for {stem_name} is empty or invalid" # Check if the waveform is not empty and is valid
-        assert downloaded_sample_rate == sample_rate and downloaded_sample_rate is not None, f"Sample rate mismatch for {stem_name}: expected {sample_rate}, got {downloaded_sample_rate}" # Check if the downloaded audio's sample rate matches the original
+        assert len(downloaded_waveform) == len(torchaudio.load(audio_bytes)[0]), f"Downloaded audio length mismatch for {stem_name}: expected {len(torchaudio.load(audio_bytes)[0])}, got {len(downloaded_waveform)}"
+        assert downloaded_sample_rate > 0 and not None, f"Downloaded audio sample rate for {stem_name} is invalid"
+        assert downloaded_sample_rate == sample_rate and not None, f"Sample rate mismatch for {stem_name}: expected {sample_rate}, got {downloaded_sample_rate}" # Check if the downloaded audio's sample rate matches the original
 
 
 # === Test upload_audio endpoint with invalid file ===
