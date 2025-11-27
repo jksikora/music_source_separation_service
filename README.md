@@ -54,3 +54,23 @@ service should generate:
 * other.wav
 * bass.wav
 * drums.wav
+
+## tests
+### functional tests
+1. activate **.venv**
+```bash
+source .venv/bin/activate # linux/macOS
+.venv\Scripts\Activate.ps1 # windows
+```
+2. run the **main** service
+```bash
+uvicorn app.main:app --port <MAIN_PORT_FROM_CONFIG>
+```
+3. run the **scnet_worker** service (in another terminal)
+```bash
+uvicorn app.workers.scnet_worker:app --port <WORKER_PORT_FROM_CONFIG>
+```
+4. run **pytest** in the project’s root folder: music_source_separation_service/
+```bash
+PYTHONPATH=. pytest -v # '-s' for enabling debugging prints 
+```
