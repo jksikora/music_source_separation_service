@@ -1,6 +1,5 @@
 import soundfile as sf
-import numpy as np
-import musdb, museval, io, csv, os, yaml, httpx, json
+import musdb, museval, io, csv, os, yaml, httpx
 
 # --- Separation Quality Benchmark Test ---
 
@@ -18,15 +17,21 @@ main_address = config["main_address"]  # e.g., "127.0.0.1:8000"
 client = httpx.Client(base_url=f"http://{main_address}", timeout=600.0) # Increased timeout to 600 seconds for long-running model inference
 
 
-# === Prepare Results Directory and CSV File for Separation Quality Test Results ===
+# === Prepare Results Directory and CSV Files for Separation Quality Test Results ===
 results_dir = "tests/performance/results"
 os.makedirs(results_dir, exist_ok=True) # Create results directory if it doesn't exist; exist_ok=True avoids error if it already exists
-csv_file = os.path.join(results_dir, "separation_quality_results.csv") # Complete path to CSV file
+csv_frames = os.path.join(results_dir, "agg_frames_separation_quality_results.csv") # Complete path to aggregated by frames CSV file
+csv_tracks = os.path.join(results_dir, "agg_tracks_separation_quality_results.csv") # Complete path to aggregated by tracks CSV file
 
-if not os.path.exists(csv_file):
-    with open(csv_file, "w", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow(["Filename", "Stem", "Median SDR", "Median SIR", "Median SAR", "Median ISR"])
+if not os.path.exists(csv_frames):
+    with open(csv_frames, "w", newline="") as cf:
+        writer = csv.writer(cf)
+        writer.writerow(["Filename", "Stem", "SDR", "SIR", "SAR", "ISR"])
+
+if not os.path.exists(csv_tracks):
+    with open(csv_tracks, "w", newline="") as cf:
+        writer = csv.writer(cf)
+        writer.writerow(["Stem", "SDR", "SIR", "SAR", "ISR"])
 
 
 # === Convert Audio to Bytes Helper Function ===
@@ -73,15 +78,17 @@ def test_separation_quality():
         except Exception as e:
             print(f"evaluation failed for: {track.name} with error: {e}")
     
-    results.save(os.path.join(results_dir, "separation_quality_results_eval.pandas")) # Save EvalStore results for later analysis
+    results.save(os.path.join(results_dir, "separation_quality_results.pandas")) # Save EvalStore results for later analysis
 
-def save_to_csv(csv_file: str):
+
+# === Save Overall Results Aggregated by Frames to CSV Function ===
+def agg_frames_to_csv(csv_frames: str):
     results = museval.EvalStore() # Initialize EvalStore to hold separation quality results
-    results_path = os.path.join(results_dir, "separation_quality_results_eval.pandas") # Path to saved EvalStore results
+    results_path = os.path.join(results_dir, "separation_quality_results.pandas") # Path to saved EvalStore results
     results.load(results_path) # Load previously saved EvalStore results
     try:
         dataframe = results.agg_frames_scores() # Get aggregated frame-level scores (one metric per stem per track)
-        with open(csv_file, 'a', newline="") as cf:
+        with open(csv_frames, 'a', newline="") as cf:
             writer = csv.writer(cf)
             for track in dataframe.index.get_level_values("track").unique(): # Iterate over unique tracks
                 track_df = dataframe.loc[track] # DataFrame for the specific track
@@ -96,8 +103,32 @@ def save_to_csv(csv_file: str):
                     print(f"{track} {stem}: "f"SDR={sdr:.3f}, SIR={sir:.3f}, SAR={sar:.3f}, ISR={isr:.3f}")
         
     except Exception as e:
-        print(f"failed to save overall results with error: {e}")
+        print(f"saving overall results aggregated by frames to csv failed with error: {e}")
+
+
+# === Save Overall Results Aggregated by Tracks to CSV Function ===
+def agg_tracks_to_csv(csv_tracks: str):
+    results = museval.EvalStore() # Initialize EvalStore to hold separation quality results
+    results_path = os.path.join(results_dir, "separation_quality_results.pandas") # Path to saved EvalStore results
+    results.load(results_path) # Load previously saved EvalStore results
+    try:
+        dataframe = results.agg_frames_tracks_scores() # Get aggregated track-level scores (one metric per stem)
+        with open(csv_tracks, 'a', newline="") as cf:
+            writer = csv.writer(cf)
+            for stem in dataframe.index.get_level_values("target").unique(): # Iterate over unique stems
+                stem_df = dataframe.loc[stem] # DataFrame for the specific stem
+                sdr = stem_df.loc["SDR"] # Median SDR for the stem
+                sir = stem_df.loc["SIR"] # Median SIR for the stem
+                sar = stem_df.loc["SAR"] # Median SAR for the stem
+                isr = stem_df.loc["ISR"] # Median ISR for the stem
+                writer.writerow([stem, sdr, sir, sar, isr]) # Write results to CSV
+
+                print(f"{stem}: "f"SDR={sdr:.3f}, SIR={sir:.3f}, SAR={sar:.3f}, ISR={isr:.3f}")
+        
+    except Exception as e:
+        print(f"saving overall results aggregated by tracks to csv failed with error: {e}")
 
 if __name__ == "__main__":
     #test_separation_quality()
-    save_to_csv(csv_file)
+    agg_frames_to_csv(csv_frames)
+    agg_tracks_to_csv(csv_tracks)
