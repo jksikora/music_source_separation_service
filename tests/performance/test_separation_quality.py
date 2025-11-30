@@ -1,4 +1,5 @@
 import soundfile as sf
+import numpy as np
 import musdb, museval, io, csv, os, yaml, httpx
 
 # --- Separation Quality Benchmark Test ---
@@ -35,7 +36,7 @@ if not os.path.exists(csv_tracks):
 
 
 # === Convert Audio to Bytes Helper Function ===
-def audio_to_bytes(audio, sample_rate):
+def _audio_to_bytes(audio: np.ndarray, sample_rate: int) -> bytes:
     buffer = io.BytesIO()
     sf.write(buffer, audio, sample_rate, format='WAV')
     buffer.seek(0)
@@ -43,12 +44,12 @@ def audio_to_bytes(audio, sample_rate):
 
 
 # === Test Separation Quality Function ===
-def test_separation_quality():
+def test_separation_quality() -> None:
     results = museval.EvalStore() # Initialize EvalStore to hold separation quality results
     for track in mus.tracks:  # Limit to first 1 for testing; remove [:1] for full test
         print(f"\nstart processing file: {track.name}")
         
-        input_audio_bytes = audio_to_bytes(track.audio, track.rate) # Convert musdb mixture from numpy.ndarray to bytes
+        input_audio_bytes = _audio_to_bytes(track.audio, track.rate) # Convert musdb mixture from numpy.ndarray to bytes
         files = {'file': (f'{track.name}.wav', input_audio_bytes, 'audio/wav')}
         upload_response = client.post("/upload_audio", files=files)
 
@@ -82,7 +83,7 @@ def test_separation_quality():
 
 
 # === Save Overall Results Aggregated by Frames to CSV Function ===
-def agg_frames_to_csv(csv_frames: str):
+def agg_frames_to_csv(csv_frames: str) -> None:
     results = museval.EvalStore() # Initialize EvalStore to hold separation quality results
     results_path = os.path.join(results_dir, "separation_quality_results.pandas") # Path to saved EvalStore results
     results.load(results_path) # Load previously saved EvalStore results
@@ -107,7 +108,7 @@ def agg_frames_to_csv(csv_frames: str):
 
 
 # === Save Overall Results Aggregated by Tracks to CSV Function ===
-def agg_tracks_to_csv(csv_tracks: str):
+def agg_tracks_to_csv(csv_tracks: str) -> None:
     results = museval.EvalStore() # Initialize EvalStore to hold separation quality results
     results_path = os.path.join(results_dir, "separation_quality_results.pandas") # Path to saved EvalStore results
     results.load(results_path) # Load previously saved EvalStore results
@@ -128,6 +129,8 @@ def agg_tracks_to_csv(csv_tracks: str):
     except Exception as e:
         print(f"saving overall results aggregated by tracks to csv failed with error: {e}")
 
+
+# === Main Execution Block ===
 if __name__ == "__main__":
     #test_separation_quality()
     agg_frames_to_csv(csv_frames)

@@ -30,13 +30,13 @@ async def async_client():
 def sample_audio_file(request):
     """Generate an invalid sample audio file for simulating uploads with invalid data"""
     format = request.param if hasattr(request, 'param') else 'WAV'  # Will default to 'wav' if no param is provided
-    fs=44100
-    waveform = np.random.randn(fs).astype(np.float32) * 0.1 # 1 seconds of random audio noise (soundfile and torchaudio expect float32 format)
+    sample_rate = 44100
+    waveform = np.random.randn(sample_rate).astype(np.float32) * 0.1 # 1 seconds of random audio noise (soundfile and torchaudio expect float32 format)
     buffer = io.BytesIO()
-    sf.write(buffer, waveform, fs, format=format) # waveform instead of waveform.T.numpy(), because it's already a numpy array
+    sf.write(buffer, waveform, sample_rate, format=format) # waveform instead of waveform.T.numpy(), because it's already a numpy array
     buffer.seek(0)
     
-    return buffer.read(), fs, format
+    return buffer.read(), sample_rate, format
 
 
 # === Sample Audio File Fixture ===
