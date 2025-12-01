@@ -1,4 +1,4 @@
-from fastapi import File, UploadFile, HTTPException, Depends
+from fastapi import File, UploadFile, HTTPException, Depends, Response
 from app.services.storage import storage
 from app.services.session_manager import session_manager
 from app.schemas.audio_schemas import AudioEntry
@@ -32,7 +32,7 @@ async def _audio_file_verification(file: UploadFile = File(...)) -> dict:
 
 
 # === Get Inference Result from SCNet Worker Function ===
-async def _get_result(worker: WorkerConfig, waveform: object, sample_rate: int, filename: str) -> io.BytesIO:
+async def _get_result(worker: WorkerConfig, waveform: object, sample_rate: int, filename: str) -> tuple[io.BytesIO, dict, str, str]:
     audio_buffer = io.BytesIO() # Create in-memory buffer for audio data
     sf.write(audio_buffer, waveform.T, sample_rate, format="WAV") # Write waveform to buffer in WAV format
     audio_buffer.seek(0) # Reset buffer pointer to the beginning
@@ -45,8 +45,12 @@ async def _get_result(worker: WorkerConfig, waveform: object, sample_rate: int, 
     else:
         logger.error(action="inference_request", status="failed", data={"worker_id": worker.worker_id, "status_code": response.status_code, "error": response.text})
         raise HTTPException(status_code=response.status_code, detail=response.text)
-    
-    return io.BytesIO(response.content)  # In-memory buffer for received ZIP file
+
+    headers = response.headers # Extract separation timestamps (if provided) from worker response headers
+    t0_model = headers.get("separation-start") # Get separation timestamps from worker response headers
+    t1_model = headers.get("separation-end")
+
+    return io.BytesIO(response.content), t0_model, t1_model # Return in-memory ZIP buffer for received ZIP file and separation timestamps
 
 
 # === Process Inference Result from SCNet Worker Function ===
@@ -63,16 +67,16 @@ async def _process_result(result_zip: io.BytesIO, filename: str) -> dict[str, Au
                     buffer = io.BytesIO(audio_bytes) # Create in-memory buffer for audio data
                     output_waveform, output_sample_rate = sf.read(buffer, dtype="float32") # Read audio data from buffer
 
-                    stem_name = Path(name).stem # Get stem name without extension
-                    stem_file_id = f"{stem_name}_{file_id}" # Unique file ID for the stem
-                    filename = f"{stem_name}_{filename}" # Filename for the stem
+                    stem_name = Path(name).stem  # Get stem name without extension
+                    stem_file_id = f"{stem_name}_{file_id}"  # Unique file ID for the stem
+                    stem_filename = f"{stem_name}_{filename}"  # Filename for the stem
 
-                    await storage.save(stem_file_id, filename, output_waveform, output_sample_rate) # Save stem audio data in storage
-                    logger.info(action="audio_save", status="success", data={"file_id": stem_file_id, "filename": filename})
+                    await storage.save(stem_file_id, stem_filename, output_waveform, output_sample_rate)  # Save stem audio data in storage
+                    logger.info(action="audio_save", status="success", data={"file_id": stem_file_id, "filename": stem_filename})
 
-                    result[stem_name] = AudioEntry( # Store separation result for the stem
+                    result[stem_name] = AudioEntry(  # Store separation result for the stem
                         file_id=stem_file_id,
-                        filename=filename,
+                        filename=stem_filename,
                         download_url=f"/download_audio/{stem_file_id}"
                     )
 
@@ -80,7 +84,7 @@ async def _process_result(result_zip: io.BytesIO, filename: str) -> dict[str, Au
 
 
 # === Perform Music Source Separation Using Available SCNet Worker Function ===
-async def music_source_separation(audiofile: dict = Depends(_audio_file_verification)) -> dict[str, AudioEntry]:
+async def music_source_separation(audiofile: dict = Depends(_audio_file_verification), response: Response = None) -> dict[str, AudioEntry]:
     """Function to perform music source separation using an available SCNet worker"""
     file = audiofile["file"]
     waveform = audiofile["waveform"]
@@ -93,11 +97,17 @@ async def music_source_separation(audiofile: dict = Depends(_audio_file_verifica
     logger.info(action="worker_acquisition", status="success", data={"worker_id": worker.worker_id, "model_type": worker.model_type})
     
     try:
-        result_zip = await _get_result(worker, waveform, sample_rate, file.filename)
+        result_zip, t0_model, t1_model = await _get_result(worker, waveform, sample_rate, file.filename)
         result = await _process_result(result_zip, file.filename)  # Process the received ZIP file
         if not result or not result_zip:
             logger.warning(action="separation_completion", status="failed", data={"filename": file.filename, "error": "no_stems_extracted"})
             raise HTTPException(status_code=500, detail="No stems extracted from the audio file")
+
+        if response is not None and (t0_model is not None and t1_model is not None):
+            response.headers["separation-start"] = t0_model # Propagate separation timestamps to response headers (for HTTP client to measure separation-only time)
+            response.headers["separation-end"] = t1_model
+            logger.info(action="inference_timestamp_propagation", status="success", data={"filename": file.filename, "separation-start": t0_model, "separation-end": t1_model})
+
         logger.info(action="separation_completion", status="success", data={"filename": file.filename, "num_stems": len(result)})
 
         return result

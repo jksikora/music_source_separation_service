@@ -42,12 +42,22 @@ worker_address = worker_config.worker_address
 async def inference(file: UploadFile) -> StreamingResponse:
     """Endpoint for performing music source separation inference on uploaded audio file"""
     try:
-        output_waveforms, output_sample_rates = await scnet_model.perform_inference(file, worker_id)  # Ensure model is loaded
+        output_waveforms, output_sample_rates, t0_model, t1_model = await scnet_model.perform_inference(file, worker_id)  # Ensure model is loaded
         validate_outputs(output_waveforms, output_sample_rates, worker_id=worker_id, filename=file.filename) # Validate inference outputs
         zipstream, headers = zipstream_generator(output_waveforms, output_sample_rates, worker_id, file.filename) # Create streaming ZIP response
+        logger.info(action="inference_processing", status="success", data={"worker_id": worker_id, "filename": file.filename, "num_stems": len(output_waveforms)})
+
+        headers = dict(headers) if headers is not None else {} # If headers are provided (by zipstream_generator) make a shallow copy, else create empty dict
+        headers.setdefault("separation-start", str(t0_model)) # Attach separation timestamps to response headers so caller can measure separation-only time; Add separation start timestamp if not already present
+        headers.setdefault("separation-end", str(t1_model)) # Add separation end timestamp if not already present
+
+        if headers.get("separation-start") and headers.get("separation-end"):
+            logger.info(action="inference_timestamp_receiving", status="success", data={"worker_id": worker_id, "filename": file.filename, "separation-start": headers["separation-start"], "separation-end": headers["separation-end"]})
+        if not headers.get("separation-start") or not headers.get("separation-end"):
+            logger.warning(action="inference_timestamp_receiving", status="failed", data={"worker_id": worker_id, "filename": file.filename, "error": "missing_separation_timestamps"})
         return StreamingResponse(zipstream, media_type="application/zip", headers=headers) #Stream the ZIP file as a response
-    
-    except HTTPException: 
+
+    except HTTPException:
         raise # Re-raise HTTP exceptions from perform_inference and validate_outputs to preserve status codes
 
     except Exception as e:

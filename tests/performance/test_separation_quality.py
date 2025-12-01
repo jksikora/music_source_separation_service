@@ -19,10 +19,10 @@ client = httpx.Client(base_url=f"http://{main_address}", timeout=600.0) # Increa
 
 
 # === Prepare Results Directory and CSV Files for Separation Quality Test Results ===
-results_dir = "tests/performance/results"
-os.makedirs(results_dir, exist_ok=True) # Create results directory if it doesn't exist; exist_ok=True avoids error if it already exists
-csv_frames = os.path.join(results_dir, "agg_frames_separation_quality_results.csv") # Complete path to aggregated by frames CSV file
-csv_tracks = os.path.join(results_dir, "agg_tracks_separation_quality_results.csv") # Complete path to aggregated by tracks CSV file
+results_dir = "tests/performance/scnet_results/separation_quality"
+os.makedirs(results_dir, exist_ok=True)  # Create results directory if it doesn't exist; exist_ok=True avoids error if it already exists
+csv_frames = os.path.join(results_dir, "agg_frames_separation_quality_results.csv") # Complete path to aggregated frame-level separation quality results CSV file
+csv_tracks = os.path.join(results_dir, "agg_tracks_separation_quality_results.csv") # Complete path to aggregated track-level separation quality results CSV file
 
 if not os.path.exists(csv_frames):
     with open(csv_frames, "w", newline="") as cf:
@@ -46,7 +46,7 @@ def _audio_to_bytes(audio: np.ndarray, sample_rate: int) -> bytes:
 # === Test Separation Quality Function ===
 def test_separation_quality() -> None:
     results = museval.EvalStore() # Initialize EvalStore to hold separation quality results
-    for track in mus.tracks:  # Limit to first 1 for testing; remove [:1] for full test
+    for track in mus.tracks[:1]:  # Limit to first 1 for testing; remove [:1] for full test
         print(f"\nstart processing file: {track.name}")
         
         input_audio_bytes = _audio_to_bytes(track.audio, track.rate) # Convert musdb mixture from numpy.ndarray to bytes
@@ -132,6 +132,6 @@ def agg_tracks_to_csv(csv_tracks: str) -> None:
 
 # === Main Execution Block ===
 if __name__ == "__main__":
-    #test_separation_quality()
+    test_separation_quality()
     agg_frames_to_csv(csv_frames)
     agg_tracks_to_csv(csv_tracks)

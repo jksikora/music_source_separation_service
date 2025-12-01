@@ -5,7 +5,7 @@ from ml_collections import ConfigDict
 from pathlib import Path
 import numpy as np
 import soundfile as sf
-import yaml, asyncio, importlib.util, io
+import yaml, asyncio, importlib.util, io, time
 
 logger = get_logger(__name__) # Logger for SCNet Model
 
@@ -39,7 +39,7 @@ class SCNetModel:
         logger.info(action="model_loading", status="success", data={"worker_id": worker_id, "model_type": model_type})
 
     # === Inference Function ===
-    async def perform_inference(self, file: UploadFile, worker_id: str) -> tuple[dict[str, np.ndarray], dict[str, int]]:
+    async def perform_inference(self, file: UploadFile, worker_id: str) -> tuple[dict[str, np.ndarray], dict[str, int], float, float]:
         """Perform inference and return results."""
         if self.separator is None: # Check if separator is initialized
             logger.error(action="inference", status="failed", data={"worker_id": worker_id, "filename": file.filename, "error": "model_not_loaded"})
@@ -48,6 +48,12 @@ class SCNetModel:
         audio = await file.read() # Read uploaded audio file
         audio_buffer = io.BytesIO(audio) # Create in-memory buffer for audio data
         waveform, sample_rate = sf.read(audio_buffer, dtype="float32") # Read audio data from buffer
-          
+        
+        def _run_separation(waveform_local, sample_rate_local): # Additional function to run separation for time measurement
+            t0_model = time.time()
+            outputs = self.separator.separate_music_file(waveform_local, sample_rate_local)
+            t1_model = time.time()
+            return (*outputs, t0_model, t1_model)
+
         async with self.inference_lock: # Acquire lock to serialize inference requests
-            return await asyncio.to_thread(self.separator.separate_music_file, waveform, sample_rate) # Perform inference in a separate thread
+            return await asyncio.to_thread(_run_separation, waveform, sample_rate) # Perform inference in a separate thread and return timestamps
