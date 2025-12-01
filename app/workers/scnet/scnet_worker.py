@@ -55,7 +55,6 @@ async def inference(file: UploadFile) -> StreamingResponse:
             logger.info(action="inference_timestamp_receiving", status="success", data={"worker_id": worker_id, "filename": file.filename, "separation-start": headers["separation-start"], "separation-end": headers["separation-end"]})
         if not headers.get("separation-start") or not headers.get("separation-end"):
             logger.warning(action="inference_timestamp_receiving", status="failed", data={"worker_id": worker_id, "filename": file.filename, "error": "missing_separation_timestamps"})
-        
         return StreamingResponse(zipstream, media_type="application/zip", headers=headers) #Stream the ZIP file as a response
 
     except HTTPException:
