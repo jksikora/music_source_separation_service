@@ -45,6 +45,8 @@ async def inference(file: UploadFile) -> StreamingResponse:
         output_waveforms, output_sample_rates = await scnet_model.perform_inference(file, worker_id)  # Ensure model is loaded
         validate_outputs(output_waveforms, output_sample_rates, worker_id=worker_id, filename=file.filename) # Validate inference outputs
         zipstream, headers = zipstream_generator(output_waveforms, output_sample_rates, worker_id, file.filename) # Create streaming ZIP response
+        logger.info(action="inference_processing", status="success", data={"worker_id": worker_id, "filename": file.filename, "num_stems": len(output_waveforms)})
+        
         return StreamingResponse(zipstream, media_type="application/zip", headers=headers) #Stream the ZIP file as a response
     
     except HTTPException: 
