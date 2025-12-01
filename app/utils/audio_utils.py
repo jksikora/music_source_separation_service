@@ -65,14 +65,14 @@ async def _process_result(result_zip: io.BytesIO, filename: str) -> dict[str, Au
 
                     stem_name = Path(name).stem # Get stem name without extension
                     stem_file_id = f"{stem_name}_{file_id}" # Unique file ID for the stem
-                    filename = f"{stem_name}_{filename}" # Filename for the stem
+                    stem_filename = f"{stem_name}_{filename}" # Filename for the stem
 
-                    await storage.save(stem_file_id, filename, output_waveform, output_sample_rate) # Save stem audio data in storage
+                    await storage.save(stem_file_id, stem_filename, output_waveform, output_sample_rate) # Save stem audio data in storage
                     logger.info(action="audio_save", status="success", data={"file_id": stem_file_id, "filename": filename})
 
                     result[stem_name] = AudioEntry( # Store separation result for the stem
                         file_id=stem_file_id,
-                        filename=filename,
+                        filename=stem_filename,
                         download_url=f"/download_audio/{stem_file_id}"
                     )
 
