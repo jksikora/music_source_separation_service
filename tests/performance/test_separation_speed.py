@@ -26,10 +26,10 @@ client = httpx.Client(base_url=f"http://{main_address}", timeout=600.0) # Increa
 # === Prepare Results Directory and CSV Files for Separation Speed Test Results ===
 results_dir = "tests/performance/scnet_results/separation_speed"
 os.makedirs(results_dir, exist_ok=True)  # Create results directory if it doesn't exist; exist_ok=True avoids error if it already exists
-csv_client = os.path.join(results_dir, "client_separation_speed_results.csv") # Complete path to client separation speed results CSV file
-csv_model = os.path.join(results_dir, "model_separation_speed_results.csv") # Complete path to model separation speed results CSV file
-agg_csv_client = os.path.join(results_dir, "agg_client_separation_speed_results.csv") # Complete path to aggregated client separation speed results CSV file
-agg_csv_model = os.path.join(results_dir, "agg_model_separation_speed_results.csv") # Complete path to aggregated model separation speed results CSV file
+csv_client = os.path.join(results_dir, "docker_client_separation_speed_results_1_3.csv") # Complete path to client separation speed results CSV file
+csv_model = os.path.join(results_dir, "docker_model_separation_speed_results_1_3.csv") # Complete path to model separation speed results CSV file
+agg_csv_client = os.path.join(results_dir, "docker_agg_client_separation_speed_results_1_3.csv") # Complete path to aggregated client separation speed results CSV file
+agg_csv_model = os.path.join(results_dir, "docker_agg_model_separation_speed_results_1_3.csv") # Complete path to aggregated model separation speed results CSV file
 
 if not os.path.exists(csv_client):
     with open(csv_client, "w", newline="") as cf:
@@ -122,31 +122,48 @@ def test_separation_speed(client: httpx.Client) -> list[tuple[str, dict[int, lis
                 audio_bytes = _convert_to_bytes(clip, sample_rate)
                 files = {'file': (filename, audio_bytes, 'audio/wav')}
 
-                t0_client = time.time()
-                upload_response = client.post("/upload_audio", files=files)
-                t1_client = time.time()
-                if upload_response.status_code != 200:
-                    raise RuntimeError(f"unexpected status code from upload_audio endpoint response: {upload_response.status_code} for file: {filename}, fragment: {fragment}s")
+                try: # Added try-except to allow saving partial results
+                    t0_client = time.time()
+                    upload_response = client.post("/upload_audio", files=files)
+                    t1_client = time.time()
+                    if upload_response.status_code != 200:
+                        raise RuntimeError(f"unexpected status code from upload_audio endpoint response: {upload_response.status_code} for file: {filename}, fragment: {fragment}s")
 
-                delta_t_client = t1_client - t0_client
-                timings_client[fragment].append(delta_t_client)
-                print(f"file: {filename}, fragment: {fragment}s, run: {i+1}, delta_t_client: {delta_t_client:.4f}s")
+                    delta_t_client = t1_client - t0_client
+                    timings_client[fragment].append(delta_t_client)
+                    print(f"file: {filename}, fragment: {fragment}s, run: {i+1}, delta_t_client: {delta_t_client:.4f}s")
 
-                t0_model = upload_response.headers.get("Separation-Start")
-                t1_model = upload_response.headers.get("Separation-End")
-                if t0_model is not None and t1_model is not None:
-                    try:
-                        delta_t_model = float(t1_model) - float(t0_model)
-                        timings_model[fragment].append(delta_t_model)
-                        print(f"file: {filename}, fragment: {fragment}s, run: {i+1}, delta_t_model: {delta_t_model:.4f}s")
-                    except Exception as e:
-                        timings_model[fragment].append(None)
-                        print(f"inference timestamp parsing failed for file: {filename}, fragment: {fragment}s, run: {i+1}, with error: {e}")
-                else:
-                    timings_model[fragment].append(None)
-                    print(f"inference timestamps not provided for file: {filename}, fragment: {fragment}s, run: {i+1}")
+                    t0_model = upload_response.headers.get("Separation-Start")
+                    t1_model = upload_response.headers.get("Separation-End")
+                    if t0_model is not None and t1_model is not None:
+                        try:
+                            delta_t_model = float(t1_model) - float(t0_model)
+                            timings_model[fragment].append(delta_t_model)
+                            print(f"file: {filename}, fragment: {fragment}s, run: {i+1}, delta_t_model: {delta_t_model:.4f}s")
+                        except Exception as e:
+                            raise RuntimeError(f"inference timestamp parsing failed for file: {filename}, fragment: {fragment}s, run: {i+1}, with error: {e}")
+                    else:
+                        raise RuntimeError(f"inference timestamps not provided for file: {filename}, fragment: {fragment}s, run: {i+1}")
+                    time.sleep(0.5) # Short sleep to avoid overwhelming the server
 
-                time.sleep(0.5) # Short sleep to avoid overwhelming the server
+                except (httpx.RequestError, RuntimeError, Exception) as e: # If the server stops or any error occurs during measurement, save collected results
+                    print(f"measurement interrupted for file {filename}, fragment {fragment}s, run {i+1}: {e}")
+
+                    if results_per_song_client or results_per_song_model:
+                        print("saving results after interruption")
+                        try:
+                            results_to_csv(csv_client, results_per_song_client)
+                            results_to_csv(csv_model, results_per_song_model)
+                            aggregate_results_to_csv(csv_client, agg_csv_client)
+                            aggregate_results_to_csv(csv_model, agg_csv_model)
+
+                        except Exception as e:
+                            print(f"failed to save partial results, error: {e}")
+                    else:
+                        print("no results to save after interruption")
+                            
+                    return results_per_song_client, results_per_song_model
+                
         results_per_song_client.append((filename, timings_client))
         results_per_song_model.append((filename, timings_model))
 

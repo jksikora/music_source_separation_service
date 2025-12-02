@@ -53,10 +53,11 @@ shows which steps used cache / which were executed during image building
 docker compose build --progress=plain 
 ```
 
-show wheter the base image was updated
+list compose services and images related to them
 ```bash
-docker image ls python:3.10.19-slim --digests
+docker compose images
 ```
+
 
 
 ## close the service
