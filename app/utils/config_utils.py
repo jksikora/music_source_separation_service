@@ -5,11 +5,11 @@ import yaml
 # === Load Worker Configuration Function ===
 def load_worker_config(model: str, serial_number: int) -> WorkerConfig:
     """Function to check if the YAML configuration file exists and load it"""
-    config_path = Path(__file__).resolve().parents[1] / "workers" / model / f"{model}{serial_number}_config.yaml" # Path to worker config file
+    config_path = Path(__file__).resolve().parents[2] / "workers" / model / f"{model}{serial_number}_config.yaml" # Path to worker config file
     if not config_path.exists():
         raise FileNotFoundError(f"Missing worker configuration file at {config_path}") # Raise error if config file does not exist
 
-    with open(config_path, "r", encoding="utf-8") as f: # Open SCNet worker config file using UTF-8 encoding for compatibility with different systems
+    with open(config_path, "r", encoding="utf-8") as f: # Open worker config file using UTF-8 encoding for compatibility with different systems
         data = yaml.safe_load(f) or {} # Load YAML content safely, return empty dict if file is empty so the check below works correctly
 
     required_fields = ("worker_id", "model_type", "worker_address", "main_address") # Define required fields for worker configuration

@@ -26,8 +26,8 @@ class SCNetModel:
         
         scnet_root = Path(spec.submodule_search_locations[0]).resolve().parent # Get SCNet package root
         config_path = str(scnet_root / "conf" / "config.yaml") # Path to SCNet default config
-        project_root = Path(__file__).resolve().parents[3] # Get the project root
-        checkpoint_path = str(project_root / "checkpoints" / "scnet" / "checkpoint.th") # Path to SCNet checkpoint
+        worker_root = Path(__file__).resolve().parents[0] # Get the project root
+        checkpoint_path = str(worker_root / "checkpoints" / "checkpoint.th") # Path to SCNet checkpoint
 
         with open(config_path, "r") as f: # Load SCNet config file
             config = ConfigDict(yaml.load(f, Loader=yaml.FullLoader)) # Load YAML content

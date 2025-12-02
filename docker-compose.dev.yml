@@ -1,0 +1,16 @@
+# docker-compose.dev.yml purpose is to override docker-compose.yml to enable development mode 
+# - mounting local source for dynamic service reload on code changes without rebuilding the images
+
+
+services:
+  main: # Service name (it will be refered as "main" inside the docker network)
+    volumes: # Overwrite app code in the image with local code to enable live changes without rebuilding the image for development purposes; Notation: "container directory : mount directory"
+      - ./app:/music_source_separation/app # Mount entire app folder replacing the one in the image
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"] # For development purposes - uncomment to enable auto-reload on code changes
+
+  scnet01: # Service name (it will be refered as "scnet" inside the docker network)
+    volumes: # Overwrite app code in the image with local code to enable live changes without rebuilding the image for development purposes; Notation: "container directory : mount directory"
+      - ./workers/scnet:/music_source_separation/workers/scnet # Mount entire scnet worker folder replacing the one in the image etc.
+      - ./workers/utils:/music_source_separation/workers/utils
+      - ./app/utils:/music_source_separation/app/utils
+    command: ["uvicorn", "workers.scnet.scnet_worker:app", "--host", "0.0.0.0", "--port", "8101", "--reload"]

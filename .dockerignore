@@ -1,0 +1,26 @@
+# Ignore virtual environments, python cache files, git related files, project files that are not needed in the Docker image and distribution/build files
+env/
+.env/
+venv/
+.venv/
+
+*.pytest_cache/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+.git/
+.github/
+.gitignore
+
+README.md
+requirements.txt
+tests/
+
+node_modules/
+*.dist-info/
+dist/
+build/
+*.egg-info/
+*.log

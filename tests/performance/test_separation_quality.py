@@ -9,9 +9,13 @@ mus = musdb.DB(root="/mnt/d/studia/praca_inzynierska/musdb18hq", is_wav=True, su
 
 
 # === Main Address Loaded from YAML File ===
-with open("app/workers/scnet/scnet1_config.yaml", "r") as f:
+with open("workers/scnet/scnet1_config.yaml", "r") as f:
     config = yaml.safe_load(f)
-main_address = config["main_address"]  # e.g., "127.0.0.1:8000"
+main_address = config["main_address"]  # e.g., "127.0.0.1:8000"; If tests are run on the host (not inside Docker) the compose service name `main:8000` is not resolvable from the host
+
+if isinstance(main_address, str) and main_address.startswith("main:"): # When the config contains the compose service name, 
+    _, port = main_address.split(":", 1) # translate it to the host address so tests can connect to the published port (localhost)
+    main_address = f"127.0.0.1:{port}"
 
 
 # === Create HTTP Client ===
@@ -46,7 +50,7 @@ def _audio_to_bytes(audio: np.ndarray, sample_rate: int) -> bytes:
 # === Test Separation Quality Function ===
 def test_separation_quality() -> None:
     results = museval.EvalStore() # Initialize EvalStore to hold separation quality results
-    for track in mus.tracks[:1]:  # Limit to first 1 for testing; remove [:1] for full test
+    for track in mus.tracks:  # Limit to first n songs by adding [:n]
         print(f"\nstart processing file: {track.name}")
         
         input_audio_bytes = _audio_to_bytes(track.audio, track.rate) # Convert musdb mixture from numpy.ndarray to bytes

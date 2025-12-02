@@ -1,0 +1,4 @@
+worker_id: scnet01
+model_type: scnet
+worker_address: scnet01:8101 # configurate worker_address
+main_address: main:8000 # configurate main_address

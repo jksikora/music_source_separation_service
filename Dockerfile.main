@@ -1,0 +1,45 @@
+FROM python:3.10.19-slim
+
+
+# Prevent Python from writing .pyc files and buffer stdout/stderr - standard practice for Dockerized Python apps (less noise, easier debugging/logging)
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+
+# Make Python treat /music_source_separation as a root package directory so imports work correctly
+ENV PYTHONPATH=/music_source_separation
+
+
+# Set working directory for all subsequent commands (COPY, RUN, CMD etc.; e.g. avoids using cd in RUN commands);
+# It is like 'cd /music_source_separation' inside the image  
+WORKDIR /music_source_separation
+
+
+# Install system packages required for the application; refresh package list, install packages without asking (-y), 
+# build-essential to compile python packages, ffmpeg for audio processing, libsndfile1 for audio python packages (e.g., soundfile)
+# and finally clean up apt cache to reduce image size
+RUN apt-get update && apt-get install -y --no-install-recommends \
+       build-essential \
+       ffmpeg \
+       libsndfile1 \
+    && rm -rf /var/lib/apt/lists/*
+
+
+# Copy requirements from project into the image so Docker can cache installed dependencies if requirements_main.txt hasn't changed (faster builds)
+COPY requirements_main.txt ./requirements_main.txt
+
+
+# Install dependencies without cache to reduce image size; This command will execute only if requirements_main.txt has changed
+RUN pip install --no-cache-dir -r ./requirements_main.txt
+
+
+# Copy main service code into music_source_separation/app directory in the image
+COPY app/ ./app/
+
+
+# Expose main port 8000 to document it; actual port mapping is done during docker run
+EXPOSE 8000
+
+
+# Container's default command; When using docker run <image> this command will be executed
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

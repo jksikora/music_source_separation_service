@@ -10,9 +10,13 @@ db_path = "/mnt/d/studia/praca_inzynierska/database/"
 
 
 # === Main Address Loaded from YAML File ===
-with open("app/workers/scnet/scnet1_config.yaml", "r") as f:
+with open("workers/scnet/scnet1_config.yaml", "r") as f:
     config = yaml.safe_load(f)
-main_address = config["main_address"]  # e.g., "127.0.0.1:8000"
+main_address = config["main_address"]  # e.g., "127.0.0.1:8000"; If tests are run on the host (not inside Docker) the compose service name `main:8000` is not resolvable from the host
+
+if isinstance(main_address, str) and main_address.startswith("main:"): # When the config contains the compose service name, 
+    _, port = main_address.split(":", 1) # translate it to the host address so tests can connect to the published port (localhost)
+    main_address = f"127.0.0.1:{port}"
 
 
 # === Create HTTP Client ===
@@ -64,7 +68,7 @@ def _collect_files(db_path: str) -> list[str]:
         raise FileNotFoundError(f"database path does not exist: {db_path}")
     files = [os.path.join(db_path, f) for f in os.listdir(db_path) if f.lower().endswith(".flac")] # Collect all .flac files from database path and return full paths
     files.sort() # Sort files by filename for consistent order
-    return files
+    return files # Limit to first n songs by adding [:n]
 
 
 # === Load Audio Fragments Function ===
@@ -107,7 +111,7 @@ def test_separation_speed(client: httpx.Client) -> list[tuple[str, dict[int, lis
         rng = random.Random(filename)  # Seed random number generator with filename for reproducibility
         for fragment in fragments:
             fragment_samples = int(fragment * sample_rate)
-            for i in range(20): # 20 measurements per fragment length
+            for i in range(15): # Set number of runs, now: 15 measurements per fragment length
                 max_start_idx = samples_num - fragment_samples # Maximum possible start index for fragment
                 if max_start_idx <= 0:
                     start = 0

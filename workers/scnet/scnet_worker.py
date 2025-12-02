@@ -1,11 +1,11 @@
 from fastapi import FastAPI, UploadFile, HTTPException
 from fastapi.responses import StreamingResponse
-from app.workers.scnet.scnet_model import SCNetModel
+from workers.scnet.scnet_model import SCNetModel
 from contextlib import asynccontextmanager
 from app.utils.config_utils import load_worker_config
-from app.utils.worker_utils import validate_outputs, zipstream_generator
+from workers.utils.worker_utils import validate_outputs, zipstream_generator
 from app.utils.logging_utils import setup_logging, get_logger
-import httpx 
+import httpx
 
 # === Lifespan Event ===
 @asynccontextmanager

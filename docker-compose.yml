@@ -1,0 +1,25 @@
+services:
+  main: # Service name (it will be refered as "main" inside the docker network)
+    container_name: music_source_separation_service # Container name on the host machine (for easier identification)
+    build: # Tell docker-compose how to build the image for this service
+      context: . # Use the current project folder (.) as the place where COPY will pull files from
+      dockerfile: Dockerfile.main # Use Dockerfile.main image to build this service
+    ports: # Port mapping from host (left; machine running Docker) to container (right)
+      - "8000:8000" # Change left for different port on host machine; Change right for different port services communicate within the docker network (also update worker config .yaml files)
+    environment: # Variables injected into the container environment
+      - SCNET01_ADDRESS=http://scnet01:8101 # For future use if needed (potentially replacing .yaml file configuration and improving registration process)
+
+  scnet01: # Service name (it will be refered as "scnet" inside the docker network)
+    container_name: scnet_worker # Container name on the host machine (for easier identification)
+    build: # Tell docker-compose how to build the image for this service
+      context: . # Use the current project folder (.) as the place where COPY will pull files from
+      dockerfile: Dockerfile.scnet # Use Dockerfile.main image to build this service
+    ports: # Port mapping from host (left; machine running Docker) to container (right)
+      - "8101:8101" # Change left for different port on host machine; Change right for different port services communicate within the docker network (also update worker config .yaml files)
+    environment: # Variables injected into the container environment 
+      - WORKER_ID=scnet01
+      - WORKER_TYPE=scnet 
+      - WORKER_ADDRESS=http://scnet01:8101 # For future use if needed (potentially replacing .yaml file configuration and improving registration process)
+      - MAIN_ADDRESS=http://main:8000 # Reachable with os.getenv("MAIN_ADDRESS")
+    depends_on: 
+      - main # Ensure main service is started before this one
