@@ -6,19 +6,19 @@ from app.utils.logging_utils import get_logger
 from app.services.storage import storage
 from app.schemas.audio_schemas import AudioEntry
 
-router = APIRouter() # Create API router for audio routes
+audio_router = APIRouter() # Create API router for audio routes
 logger = get_logger(__name__) # Logger for audio_routes module
 
 
 # === Upload Audio Endpoint ===
-@router.post("/upload_audio", response_model=dict[str, AudioEntry])
+@audio_router.post("/upload_audio", response_model=dict[str, AudioEntry])
 async def upload_audio(result: dict[str, AudioEntry] = Depends(music_source_separation)) -> dict[str, AudioEntry]:
     """Endpoint to upload audio file for music source separation; The response model enforces the contract returned by the dependency result"""
     return result
 
 
 # === Download Audio Endpoint ===
-@router.get("/download_audio/{file_id}")
+@audio_router.get("/download_audio/{file_id}")
 async def download_audio(file_id: str) -> StreamingResponse:
     """Endpoint to download processed audio file with file ID"""
     logger.debug(action="download_request", status="success", data={"file_id": file_id})
