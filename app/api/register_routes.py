@@ -13,6 +13,16 @@ logger = get_logger(__name__) # Logger for register_routes module
 @register_router.post("/register_worker")
 async def register_worker(worker_data: Worker) -> None:
     """Endpoint for workers to register themselves in Session Manager"""
+    try: # Check if the worker's model is loaded before registering
+        async with httpx.AsyncClient(timeout=5) as client:  # Short timeout for quick check maintaining service responsiveness
+            response = await client.get(f"http://{worker_data.worker_address}/loaded") # Use /loaded endpoint to check if model is loaded
+            if response.status_code != 200:
+                logger.warning(action="worker_registration", status="failed", data={"worker_id": worker_data.worker_id, "status_code": response.status_code, "error": "model_not_loaded"})
+                raise HTTPException(status_code=503, detail="Worker model not loaded")
+    except httpx.RequestError as exc:
+        logger.warning(action="worker_registration", status="failed", data={"worker_id": worker_data.worker_id, "error": "if_loaded_failed", "details": str(exc)})
+        raise HTTPException(status_code=503, detail="Unable to verify worker model status")
+
     try:
         await session_manager.register_worker(
             worker_id=worker_data.worker_id,
@@ -36,7 +46,7 @@ async def try_register_request(model: str, serial_number: int) -> None:
 
     try:
         async with httpx.AsyncClient(timeout=10) as client: # create HTTP client with timeout
-            response = await client.post(f"http://{worker_config.worker_address}/register_request") # Send registration request to SCNet worker
+            response = await client.post(f"http://{worker_config.worker_address}/register_request", json=worker_config.model_dump()) # Send registration request to worker with config data; model_dump() converts Pydantic model to Python dict
         if response.status_code == 200:
             logger.info(action="registration_request", status="success", data={"address": worker_config.worker_address})
         else:

@@ -39,7 +39,7 @@ async def _get_result(worker: WorkerConfig, waveform: object, sample_rate: int, 
 
     async with httpx.AsyncClient(timeout=None) as client:  # HTTP client with no timeout
         files = {"file": (filename, audio_buffer, "audio/wav")}  # Prepare file for upload
-        response = await client.post(f"http://{worker.worker_address}/{worker.worker_id}/inference", files=files)  # Send inference request to SCNet worker
+        response = await client.post(f"http://{worker.worker_address}/inference", files=files)  # Send inference request to SCNet worker
     if response.status_code == 200:
         logger.info(action="inference_request", status="success", data={"filename": filename, "worker_id": worker.worker_id, "address": worker.worker_address})
     else:

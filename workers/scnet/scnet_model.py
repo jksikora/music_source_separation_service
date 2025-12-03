@@ -57,3 +57,8 @@ class SCNetModel:
 
         async with self.inference_lock: # Acquire lock to serialize inference requests
             return await asyncio.to_thread(_run_separation, waveform, sample_rate) # Perform inference in a separate thread and return timestamps
+    
+    # === Check if Model is Loaded ===
+    def is_loaded(self) -> bool:
+        """Check if the SCNet model is loaded and ready for inference."""
+        return self.separator is not None

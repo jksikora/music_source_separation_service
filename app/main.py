@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from app.api.audio_routes import audio_router
-from app.api.register_routes import try_register_request, register_router
+from app.api.register_routes import register_router, try_register_request
 from contextlib import asynccontextmanager
 from app.utils.logging_utils import setup_logging, get_logger
 import asyncio

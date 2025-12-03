@@ -1,11 +1,11 @@
 from fastapi import FastAPI, UploadFile, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 from workers.scnet.scnet_model import SCNetModel
+from workers.api.worker_register_routes import worker_register_router, try_register
 from contextlib import asynccontextmanager
 from app.utils.config_utils import load_worker_config
 from workers.utils.worker_utils import validate_outputs, zipstream_generator
 from app.utils.logging_utils import setup_logging, get_logger
-import httpx
 
 # === Lifespan Event ===
 @asynccontextmanager
@@ -14,12 +14,13 @@ async def lifespan(app: FastAPI):
     global scnet_model
     scnet_model = SCNetModel()
     await scnet_model.load_model(worker_id, model_type) # Load SCNet model on startup
-    await try_register()
+    await try_register(worker_id, model_type, worker_address, main_address) # Attempt to register worker after model is loaded
     yield # Pauses here; Code after yield runs on shutdown
 
 
 app = FastAPI(title = "SCNetWorker", lifespan=lifespan)
 
+app.include_router(worker_register_router) # Include worker registration API routes
 setup_logging() # Setup logging configuration
 logger = get_logger(__name__) # Logger for SCNet Worker
 
@@ -38,7 +39,7 @@ worker_address = worker_config.worker_address
 
 
 # === Inference Endpoint ===
-@app.post(f"/{worker_id}/inference")
+@app.post(f"/inference")
 async def inference(file: UploadFile) -> StreamingResponse:
     """Endpoint for performing music source separation inference on uploaded audio file"""
     try:
@@ -66,39 +67,10 @@ async def inference(file: UploadFile) -> StreamingResponse:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# === Register Request Endpoint ===
-@app.post("/register_request")
-async def register_request() -> None:
-    """Endpoint for main app to request worker registration in Session Manager"""
-    try:
-        await try_register()
-        logger.info(action="registration_request", status="success", data={"worker_id": worker_id})
-
-    except Exception:
-        logger.warning(action="registration_request", status="failed", data={"worker_id": worker_id, "status_code": 500, "error": "registration_failed"})
-        raise HTTPException(status_code=500, detail="Registration attempt failed")
-
-
-# === Try Register SCNet Worker Function ===
-async def try_register() -> None:
-    """Function to attempt registering SCNet worker with main app in Session Manager if model is initialized"""
-    if scnet_model.separator is None:
-        logger.warning(action="registration_attempt", status="failed", data={"worker_id": worker_id, "status_code": 500, "error": "model_not_initialized"})
-        return  # skip the HTTP call until load_model completes
-
-    worker_data = {
-        "worker_id": worker_id,
-        "model_type": model_type,
-        "worker_address": worker_address,
-    }
-
-    try:
-        async with httpx.AsyncClient(timeout=10) as client: # HTTP client with timeout
-            response = await client.post(f"http://{main_address}/register_worker", json=worker_data) # Send registration request to main app
-        if response.status_code == 200:
-            logger.info(action="registration_attempt", status="success", data={"worker_id": worker_id, "model_type": model_type, "address": worker_address})
-        else:
-            logger.warning(action="registration_attempt", status="failed", data={"worker_id": worker_id, "status_code": response.status_code, "error": response.text})
-    
-    except Exception as e:
-        logger.warning(action="registration_attempt", status="failed", data={"worker_id": worker_id, "status_code": 500, "error": str(e)})
+# === Loaded Status Endpoint ===
+@app.get(f"/loaded")
+async def get_loaded_status():
+    """Endpoint to check if the SCNet model is loaded and ready."""
+    loaded = scnet_model.is_loaded()
+    status_code = 200 if loaded else 503
+    return JSONResponse(status_code=status_code, content={"is_loaded": loaded})

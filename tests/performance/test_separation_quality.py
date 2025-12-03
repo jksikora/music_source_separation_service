@@ -13,7 +13,7 @@ with open("workers/scnet/scnet1_config.yaml", "r") as f:
     config = yaml.safe_load(f)
 main_address = config["main_address"]  # e.g., "127.0.0.1:8000"; If tests are run on the host (not inside Docker) the compose service name `main:8000` is not resolvable from the host
 
-if isinstance(main_address, str) and main_address.startswith("main:"): # When the config contains the compose service name, 
+if isinstance(main_address, str) and ":" in main_address: # When the config contains the compose service name, 
     _, port = main_address.split(":", 1) # translate it to the host address so tests can connect to the published port (localhost)
     main_address = f"127.0.0.1:{port}"
 
