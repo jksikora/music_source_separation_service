@@ -35,8 +35,8 @@ RUN pip install --no-cache-dir -r requirements_scnet.txt
 
 
 # Copy SCNet worker code and other essentials for the worker in the image 
-COPY workers/scnet ./workers/scnet
-COPY workers/utils/ ./workers/utils/
+COPY workers/ ./workers/
+RUN rm -rf ./workers/dttnet
 COPY app/utils/ ./app/utils/
 COPY app/schemas/worker_schemas.py ./app/schemas/worker_schemas.py
 
