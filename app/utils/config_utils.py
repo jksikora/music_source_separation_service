@@ -15,7 +15,7 @@ def load_worker_config(model: str, serial_number: int) -> WorkerConfig:
     for field in ["main_address", "worker_address"]:
         if isinstance(data.get(field), str) and ":" in data[field]:  # When the config contains the compose service name, 
             service, port = data[field].split(":", 1) # translate it to the host address so tests can connect to the published port (localhost)
-            if service in ["main", "scnet01"]:  # Add other services as needed
+            if service in ["main", "scnet01", "dttnet01"]:  # Add other services as needed
                 data[field] = f"127.0.0.1:{port}"
 
     required_fields = ("worker_id", "model_type", "worker_address", "main_address") # Define required fields for worker configuration

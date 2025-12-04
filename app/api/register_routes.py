@@ -3,7 +3,7 @@ from app.services.session_manager import session_manager
 from app.schemas.worker_schemas import Worker
 from app.utils.logging_utils import get_logger
 from app.utils.config_utils import load_worker_config
-import httpx
+import httpx, asyncio
 
 register_router = APIRouter() # Create API router for register routes
 logger = get_logger(__name__) # Logger for register_routes module
@@ -13,14 +13,24 @@ logger = get_logger(__name__) # Logger for register_routes module
 @register_router.post("/register_worker")
 async def register_worker(worker_data: Worker) -> None:
     """Endpoint for workers to register themselves in Session Manager"""
-    try: # Check if the worker's model is loaded before registering
-        async with httpx.AsyncClient(timeout=5) as client:  # Short timeout for quick check maintaining service responsiveness
-            response = await client.get(f"http://{worker_data.worker_address}/loaded") # Use /loaded endpoint to check if model is loaded
-            if response.status_code != 200:
-                logger.warning(action="worker_registration", status="failed", data={"worker_id": worker_data.worker_id, "status_code": response.status_code, "error": "model_not_loaded"})
-                raise HTTPException(status_code=503, detail="Worker model not loaded")
-    except httpx.RequestError as exc:
-        logger.warning(action="worker_registration", status="failed", data={"worker_id": worker_data.worker_id, "error": "if_loaded_failed", "details": str(exc)})
+    backoff = 0.5
+    max_backoff = 2.0
+    deadline = 5.0
+    elapsed = 0.0
+    last_error = None
+    while elapsed < deadline: # Retry loop with deadline for more robust checking if model is loaded (in case long model load times)
+        try: # Check if the worker's model is loaded before registering
+            async with httpx.AsyncClient(timeout=2) as client:  # Short timeout for quick check maintaining service responsiveness
+                response = await client.get(f"http://{worker_data.worker_address}/loaded") # Use /loaded endpoint to check if model is loaded
+                if response.status_code == 200:
+                    break
+        except httpx.RequestError as exc:
+            last_error = str(exc)
+        await asyncio.sleep(backoff)
+        elapsed += backoff
+        backoff = min(backoff * 1.5, max_backoff)  # Exponential backoff until max 2 seconds
+    else:
+        logger.warning(action="worker_registration", status="failed", data={"worker_id": worker_data.worker_id, "error": "is_loaded_check_failed", "details": last_error})
         raise HTTPException(status_code=503, detail="Unable to verify worker model status")
 
     try:

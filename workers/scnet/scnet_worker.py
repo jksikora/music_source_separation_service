@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from app.utils.config_utils import load_worker_config
 from workers.utils.worker_utils import validate_outputs, zipstream_generator
 from app.utils.logging_utils import setup_logging, get_logger
+import asyncio
 
 # === Lifespan Event ===
 @asynccontextmanager
@@ -14,7 +15,7 @@ async def lifespan(app: FastAPI):
     global scnet_model
     scnet_model = SCNetModel()
     await scnet_model.load_model(worker_id, model_type) # Load SCNet model on startup
-    await try_register(worker_id, model_type, worker_address, main_address) # Attempt to register worker after model is loaded
+    asyncio.create_task(try_register(worker_id, model_type, worker_address, main_address)) # Attempt to register worker after model is loaded; asyncio task to not block startup otherwise registartion will not work  
     yield # Pauses here; Code after yield runs on shutdown
 
 
