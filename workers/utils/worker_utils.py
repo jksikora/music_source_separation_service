@@ -12,6 +12,22 @@ logger = get_logger(__name__) # Logger for main module
 # === Helper Buffer Generator Function ===
 def _buffer_generator(waveform: np.ndarray, sample_rate: int, chunk_size: int = 256 * 1024) -> Generator[bytes, None, None]:
     """Helper function to yield WAV-encoded chunks without loading entire response in memory"""
+    if not isinstance(waveform, np.ndarray): # Check that waveform is a numpy array
+        raise ValueError(f"Waveform is not a numpy array; type={type(waveform)}")
+    if waveform.dtype != np.float32: # Check that waveform dtype is float32
+        raise ValueError(f"Waveform dtype is not float32; dtype={waveform.dtype}")
+    if waveform.ndim == 1: # Mono
+        pass
+    elif waveform.ndim == 2: # Multi-channel
+        if waveform.shape[1] in [1, 2]: # Check if channels are in second dimension
+            pass  # Already correct
+        elif waveform.shape[0] in [1, 2]: # Check if channels are in first dimension
+            waveform = waveform.T # Saving to WAV requires (samples, channels)
+        else:
+            raise ValueError(f"Waveform has invalid channel count; shape={waveform.shape}")
+    else:
+        raise ValueError(f"Waveform has invalid number of dimensions; shape={waveform.shape}")
+    
     buffer = io.BytesIO()
     sf.write(buffer, waveform, sample_rate, format="WAV")
     buffer.seek(0)

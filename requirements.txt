@@ -14,3 +14,4 @@ pytest-asyncio==1.3.0
 musdb==0.4.3
 museval==0.4.1
 -e git+https://github.com/jksikora/SCNet.git#egg=scnet
+-e git+https://github.com/jksikora/DTTNet-Pytorch.git#egg=dttnet

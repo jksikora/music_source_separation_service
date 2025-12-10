@@ -13,8 +13,8 @@ import asyncio
 async def lifespan(app: FastAPI):
     """On startup load SCNet model and try registering worker"""
     global scnet_model
-    scnet_model = SCNetModel()
-    await scnet_model.load_model(worker_id, model_type) # Load SCNet model on startup
+    scnet_model = SCNetModel(worker_id)
+    await scnet_model.load_model() # Load SCNet model on startup
     asyncio.create_task(try_register(worker_id, model_type, worker_address, main_address)) # Attempt to register worker after model is loaded; asyncio task to not block startup otherwise registartion will not work  
     yield # Pauses here; Code after yield runs on shutdown
 
@@ -29,9 +29,9 @@ logger = get_logger(__name__) # Logger for SCNet Worker
 # === Worker Configuration Loaded from YAML File ===
 try:
     worker_config = load_worker_config("scnet", 1)
-except (FileNotFoundError, ValueError) as exc:
-    logger.error(action="config_loading", status="failed", data={"error": "invalid_worker_config", "details": str(exc)})
-    raise RuntimeError("Loading worker configuration failed") from exc # Raise error if config file is missing or invalid, from exc chains the original exception to the new one
+except (FileNotFoundError, ValueError) as e:
+    logger.error(action="config_loading", status="failed", data={"error": "invalid_worker_config", "details": str(e)})
+    raise RuntimeError("Loading worker configuration failed") from e # Raise error if config file is missing or invalid, from exc chains the original exception to the new one
 
 worker_id = worker_config.worker_id
 model_type = worker_config.model_type
@@ -44,7 +44,7 @@ worker_address = worker_config.worker_address
 async def inference(file: UploadFile) -> StreamingResponse:
     """Endpoint for performing music source separation inference on uploaded audio file"""
     try:
-        output_waveforms, output_sample_rates, t0_model, t1_model = await scnet_model.perform_inference(file, worker_id)  # Ensure model is loaded
+        output_waveforms, output_sample_rates, t0_model, t1_model = await scnet_model.perform_inference(file)  # Ensure model is loaded
         validate_outputs(output_waveforms, output_sample_rates, worker_id=worker_id, filename=file.filename) # Validate inference outputs
         zipstream, headers = zipstream_generator(output_waveforms, output_sample_rates, worker_id, file.filename) # Create streaming ZIP response
         logger.info(action="inference_processing", status="success", data={"worker_id": worker_id, "filename": file.filename, "num_stems": len(output_waveforms)})
@@ -64,7 +64,7 @@ async def inference(file: UploadFile) -> StreamingResponse:
         raise # Re-raise HTTP exceptions from perform_inference and validate_outputs to preserve status codes
 
     except Exception as e:
-        logger.exception(action="inference", status="failed", data={"worker_id": worker_id, "filename": file.filename, "status_code": 500, "error": str(e)})
+        logger.error(action="inference", status="failed", data={"worker_id": worker_id, "filename": file.filename, "status_code": 500, "error": str(e)})
         raise HTTPException(status_code=500, detail=str(e))
 
 

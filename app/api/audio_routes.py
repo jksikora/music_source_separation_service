@@ -11,7 +11,7 @@ logger = get_logger(__name__) # Logger for audio_routes module
 
 
 # === Upload Audio Endpoint ===
-@audio_router.post("/upload_audio", response_model=dict[str, AudioEntry])
+@audio_router.post("/upload_audio/{model}", response_model=dict[str, AudioEntry])
 async def upload_audio(result: dict[str, AudioEntry] = Depends(music_source_separation)) -> dict[str, AudioEntry]:
     """Endpoint to upload audio file for music source separation; The response model enforces the contract returned by the dependency result"""
     return result

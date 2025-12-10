@@ -84,16 +84,25 @@ async def _process_result(result_zip: io.BytesIO, filename: str) -> dict[str, Au
 
 
 # === Perform Music Source Separation Using Available SCNet Worker Function ===
-async def music_source_separation(audiofile: dict = Depends(_audio_file_verification), response: Response = None) -> dict[str, AudioEntry]:
-    """Function to perform music source separation using an available SCNet worker"""
+async def music_source_separation(model: str, audiofile: dict = Depends(_audio_file_verification), response: Response = None) -> dict[str, AudioEntry]:
+    """Function to perform music source separation"""
+    if not isinstance(model, str) or not model.strip():
+        logger.warning(action="model_validation", status="failed", data={"status_code": 400, "error": "invalid_model_type"})
+        raise HTTPException(status_code=400, detail="Model type must be a non-empty string")
+
     file = audiofile["file"]
     waveform = audiofile["waveform"]
     sample_rate = audiofile["sample_rate"]
+    model = model.strip().lower()
+
+    if not model in ("scnet", "dttnet"):
+        logger.warning(action="model_validation", status="failed", data={"status_code": 400, "error": "unsupported_model_type"})
+        raise HTTPException(status_code=400, detail="Unsupported model type")
     
-    worker = await session_manager.get_worker("scnet")  # Acquire an available SCNet worker
+    worker = await session_manager.get_worker(model)  # Acquire an available worker for the requested model
     if not worker:
         logger.warning(action="worker_acquisition", status="failed", data={"status_code": 503, "error": "no_available_workers"})
-        raise HTTPException(status_code=503, detail="No available SCNet workers")
+        raise HTTPException(status_code=503, detail=f"No available {model} workers")
     logger.info(action="worker_acquisition", status="success", data={"worker_id": worker.worker_id, "model_type": worker.model_type})
     
     try:

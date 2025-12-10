@@ -13,36 +13,37 @@ logger = get_logger(__name__) # Logger for SCNet Model
 # === SCNet Model Management Class ===
 class SCNetModel:
     """Class to manage SCNet model loading and inference."""
-    def __init__(self):
+    def __init__(self, worker_id: str):
+        self.worker_id = worker_id
         self.separator: Seperator | None = None
         self.inference_lock = asyncio.Lock()
-    
-    # === Model Loading Function ===
-    async def load_model(self, worker_id: str, model_type: str) -> None:
-        """Function to load SCNet model, initialize separator instance on startup and try registering worker"""
+        
         spec = importlib.util.find_spec("scnet") # Check if SCNet package is importable
         if spec is None:
             raise ImportError("SCNet package not found")
-        
-        scnet_root = Path(spec.submodule_search_locations[0]).resolve().parent # Get SCNet package root
-        config_path = str(scnet_root / "conf" / "config.yaml") # Path to SCNet default config
-        worker_root = Path(__file__).resolve().parents[0] # Get the project root
-        checkpoint_path = str(worker_root / "checkpoints" / "checkpoint.th") # Path to SCNet checkpoint
 
-        with open(config_path, "r") as f: # Load SCNet config file
+        self.scnet_root = Path(spec.submodule_search_locations[0]).resolve().parent # Get SCNet package root
+        self.config_path = str(self.scnet_root / "conf" / "config.yaml") # Path to SCNet default config
+        self.worker_root = Path(__file__).resolve().parents[0] # Get the project root
+        self.checkpoint_path = str(self.worker_root / "checkpoints" / "checkpoint.th") # Path to SCNet checkpoint
+
+    # === Model Loading Function ===
+    async def load_model(self) -> None:
+        """Function to load SCNet model, initialize separator instance on startup and try registering worker"""
+        with open(self.config_path, "r") as f: # Load SCNet config file
             config = ConfigDict(yaml.load(f, Loader=yaml.FullLoader)) # Load YAML content
             
         model = SCNet(**config.model) # Unpack model configuration and create SCNet model instance
         model.eval() # Set model to evaluation mode
-        self.separator = Seperator(model, checkpoint_path) # Load model checkpoint into Seperator instance, select device automatically (CPU/GPU) and prepare for inference
+        self.separator = Seperator(model, self.checkpoint_path) # Load model checkpoint into Seperator instance, select device automatically (CPU/GPU) and prepare for inference
 
-        logger.info(action="model_loading", status="success", data={"worker_id": worker_id, "model_type": model_type})
+        logger.info(action="model_loading", status="success", data={"worker_id": self.worker_id})
 
     # === Inference Function ===
-    async def perform_inference(self, file: UploadFile, worker_id: str) -> tuple[dict[str, np.ndarray], dict[str, int], float, float]:
+    async def perform_inference(self, file: UploadFile) -> tuple[dict[str, np.ndarray], dict[str, int], float, float]:
         """Perform inference and return results."""
         if self.separator is None: # Check if separator is initialized
-            logger.error(action="inference", status="failed", data={"worker_id": worker_id, "filename": file.filename, "error": "model_not_loaded"})
+            logger.error(action="inference", status="failed", data={"worker_id": self.worker_id, "filename": file.filename, "error": "model_not_loaded"})
             raise HTTPException(status_code=503, detail="Model not loaded")
 
         audio = await file.read() # Read uploaded audio file
