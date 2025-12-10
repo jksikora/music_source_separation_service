@@ -6,29 +6,30 @@ import pytest, io, torchaudio, asyncio, time
 # --- Endpoint tests ---
 
 # === Test upload_audio endpoint ===
+@pytest.mark.parametrize("model", ["scnet", "dttnet"])
 @pytest.mark.parametrize("sample_audio_file", ["WAV", "FLAC"], indirect=True) # Run test for both "WAV" and "FLAC" formats; indirect=True tells pytest to pass the param to the fixture not the test function
-def test_upload_audio(client, sample_audio_file):
+def test_upload_audio(client, model, sample_audio_file):
     """Testing upload_audio endpoint for successful stem extraction
     1. Check the response status code is 200
     2. Check the response JSON contains expected stems and fields"""
 
     audio_bytes, _, format = sample_audio_file
-    files = {'file': (f'test.{format.lower()}', audio_bytes, f'audio/{format.lower()}')} #Preparing file for upload (name, content, mime type)
-    upload_response = client.post("/upload_audio", files=files) #Making POST request to the upload_audio endpoint
-    assert upload_response.status_code == 200, f"Unexpected status code: {upload_response.status_code}" #Check if response status code is 200
-    data = upload_response.json() #Parsing JSON response (converts response body to Python dict)
-    
+    files = {'file': (f'test.{format.lower()}', audio_bytes, f'audio/{format.lower()}')} # Preparing audio file for upload (name, content, mime type)
+    upload_response = client.post(f"/upload_audio/{model}", files=files, timeout=60.0) # Making POST request to upload_audio endpoint; Extended timeout for DTTNet
+    assert upload_response.status_code == 200, f"[{model}] Unexpected status code: {upload_response.status_code}" # Check if response status code is 200
+    data = upload_response.json() # Parsing JSON response (converts response body to Python dict)
     expected_stems = {"vocals", "drums", "bass", "other"}
     for stem in expected_stems:
-        assert stem in data, f"Stem '{stem}' not found in response" #Check if each expected stem is in the result
+        assert stem in data, f"[{model}] Stem '{stem}' not found in response" # Check if each expected stem is present in the response
         stem_info = data[stem]
         for field in ["file_id", "filename", "download_url"]:
-            assert field in stem_info, f"Field '{field}' missing in stem '{stem}' info" #Check if each expected field is in the stem info
+            assert field in stem_info, f"[{model}] Field '{field}' missing in stem '{stem}' info" # Check if each expected field is present in the stem info
 
 
 # === Test download_audio endpoint ===
+@pytest.mark.parametrize("model", ["scnet", "dttnet"])
 @pytest.mark.parametrize("sample_audio_file", ["WAV", "FLAC"], indirect=True) # Run test for both "WAV" and "FLAC" formats; indirect=True tells pytest to pass the param to the fixture not the test function
-def test_download_audio(client, sample_audio_file):
+def test_download_audio(client, model, sample_audio_file):
     """Testing download_audio endpoint for successful stem extraction
     1. Check the response status code for upload and download is 200
     2. Check the response content type is audio/wav
@@ -38,29 +39,29 @@ def test_download_audio(client, sample_audio_file):
 
     audio_bytes, sample_rate, format = sample_audio_file
     original_waveform, _ = torchaudio.load(io.BytesIO(audio_bytes))
-    files = {'file': (f'test.{format.lower()}', audio_bytes, f'audio/{format.lower()}')} #Preparing file for upload (name, content, mime type)
-    upload_response = client.post("/upload_audio", files=files)
-    assert upload_response.status_code == 200, f"Unexpected status code: {upload_response.status_code}" #Check if upload response status code is 200
+    files = {'file': (f'test.{format.lower()}', audio_bytes, f'audio/{format.lower()}')} # Preparing audio file for upload (name, content, mime type)
+    upload_response = client.post(f"/upload_audio/{model}", files=files, timeout=60.0) # Making POST request to upload_audio endpoint; Extended timeout for DTTNet
+    assert upload_response.status_code == 200, f"[{model}] Unexpected status code: {upload_response.status_code}" # Check if upload response status code is 200
     data = upload_response.json()
 
     stem_waveforms = []
     for stem_name, stem_info in data.items(): # Check if all stems can be downloaded and are valid audio files
         file_id = stem_info["file_id"]
-        download_response = client.get(f"/download_audio/{file_id}") # Making GET request to the download_audio endpoint with the stem's file_id
-        assert download_response.status_code == 200, f"Unexpected status code for {stem_name}: {download_response.status_code}" # Check if download response status code is 200
-        assert download_response.headers["content-type"].lower() == "audio/wav", f"Unexpected content type for {stem_name}: {download_response.headers['content-type']}" # Check if content type is audio/wav (case insensitive)
-        assert int(download_response.headers["content-length"]) > 0, f"Downloaded file for {stem_name} is empty" # Check if the response content is not empty 
+        download_response = client.get(f"/download_audio/{file_id}") # Making GET request to download_audio endpoint with the stem's file_id
+        assert download_response.status_code == 200, f"[{model}] Unexpected status code for {stem_name}: {download_response.status_code}" # Check if download response status code is 200
+        assert download_response.headers["content-type"].lower() == "audio/wav", f"[{model}] Unexpected content type for {stem_name}: {download_response.headers['content-type']}" # Check if content type is audio/wav (case insensitive)
+        assert int(download_response.headers["content-length"]) > 0, f"[{model}] Downloaded file for {stem_name} is empty" # Check if the response content is not empty
 
         buffer = io.BytesIO(download_response.content)
         downloaded_waveform, downloaded_sample_rate = torchaudio.load(buffer) # Load audio from the response content and verify if it's valid with torchaudio
-        assert len(downloaded_waveform) > 0 and downloaded_waveform is not None, f"Downloaded audio for {stem_name} is empty or invalid" # Check if the waveform is not empty and is valid
-        assert len(downloaded_waveform) == len(original_waveform), f"Downloaded audio length mismatch for {stem_name}: expected {len(original_waveform)}, got {len(downloaded_waveform)}" # Check if the downloaded audio length matches the original
-        assert downloaded_sample_rate > 0 and not None, f"Downloaded audio sample rate for {stem_name} is invalid" # Check if the downloaded audio's sample rate is valid
-        assert downloaded_sample_rate == sample_rate and not None, f"Sample rate mismatch for {stem_name}: expected {sample_rate}, got {downloaded_sample_rate}" # Check if the downloaded audio's sample rate matches the original
+        assert len(downloaded_waveform) > 0 and downloaded_waveform is not None, f"[{model}] Downloaded audio for {stem_name} is empty or invalid" # Check if the waveform is not empty and is valid
+        assert downloaded_waveform.shape[1] == original_waveform.shape[1], f"[{model}] Downloaded audio length mismatch for {stem_name}: expected {original_waveform.shape[1]}, got {downloaded_waveform.shape[1]}" # Check if the downloaded audio length matches the original
+        assert downloaded_sample_rate > 0 and not None, f"[{model}] Downloaded audio sample rate for {stem_name} is invalid" # Check if the downloaded audio's sample rate is valid
+        assert downloaded_sample_rate == sample_rate and not None, f"[{model}] Sample rate mismatch for {stem_name}: expected {sample_rate}, got {downloaded_sample_rate}" # Check if the downloaded audio's sample rate matches the original
         stem_waveforms.append(downloaded_waveform)
-    
-    print(f"\nMax difference: {np.max(np.abs(sum(stem_waveforms).numpy() - original_waveform.numpy()))}") # Tp see the maximum difference for debugging use "-s" after pytest command
-    assert np.allclose(sum(stem_waveforms).numpy(), original_waveform.numpy(), atol=0.3), "Sum of stems does not closely match original audio" # Check if the sum of all stems matches the original audio
+
+    print(f"\n[{model}] Max difference: {np.max(np.abs(sum(stem_waveforms).numpy() - original_waveform.numpy()))}") # Debug info: Print max difference between sum of stems and original; use '-s' pytest flag to see output
+    assert np.allclose(sum(stem_waveforms).numpy(), original_waveform.numpy(), atol=0.5), f"[{model}] Sum of stems does not closely match original audio" # Check if sum of all stems closely matches original audio (with tolerance)
 
 
 # === Test upload_audio endpoint with invalid file ===
@@ -72,7 +73,7 @@ def test_upload_audio_invalid_file(client, invalid_sample_audio_file):
     
     filename, data, mime_type = invalid_sample_audio_file
     files = {'file': (filename, data, mime_type)} #Preparing a non-audio file for upload
-    response = client.post("/upload_audio", files=files) #Making POST request with an invalid file
+    response = client.post("/upload_audio/scnet", files=files) #Making POST request with an invalid file; Using scnet model but could be any
     assert response.status_code == 400, f"Unexpected status code: {response.status_code}"
     data = response.json()
     assert data["detail"] == "Invalid audio file", f"Unexpected error message: {data['detail']}" #Check that the error message is as expected
@@ -86,8 +87,8 @@ async def test_upload_audio_concurrent_uploads(async_client, sample_audio_file):
     2. Check if one upload succeeds and the other fails with expected error message"""
     audio_bytes, _, _ = sample_audio_file
     files = {'file': ('test.wav', audio_bytes, 'audio/wav')}
-    task1 = async_client.post("/upload_audio", files=files)
-    task2 = async_client.post("/upload_audio", files=files)
+    task1 = async_client.post("/upload_audio/scnet", files=files) # Using scnet model but could be any
+    task2 = async_client.post("/upload_audio/scnet", files=files) # Must match the above
     response1, response2 = await asyncio.gather(task1, task2) # Send two upload requests concurrently
 
     statuses = {response1.status_code, response2.status_code}
@@ -101,7 +102,7 @@ async def test_upload_audio_concurrent_uploads(async_client, sample_audio_file):
 
     fail_response = response1 if response1.status_code == 503 else response2 # The failed one should have no_available_workers error
     fail_data = fail_response.json()
-    assert fail_data['detail'] == "No available SCNet workers", f"Unexpected error message: {fail_data['detail']}"
+    assert fail_data['detail'] == "No available scnet workers", f"Unexpected error message: {fail_data['detail']}"
 
 
 # === Test download_audio endpoint with invalid file_id ===

@@ -99,7 +99,7 @@ async def music_source_separation(model: str, audiofile: dict = Depends(_audio_f
         logger.warning(action="model_validation", status="failed", data={"status_code": 400, "error": "unsupported_model_type"})
         raise HTTPException(status_code=400, detail="Unsupported model type")
     
-    worker = await session_manager.get_worker(model)  # Acquire an available worker for the requested model
+    worker = await session_manager.get_worker(model) # Acquire an available worker for the requested model
     if not worker:
         logger.warning(action="worker_acquisition", status="failed", data={"status_code": 503, "error": "no_available_workers"})
         raise HTTPException(status_code=503, detail=f"No available {model} workers")
