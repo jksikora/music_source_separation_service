@@ -117,7 +117,7 @@ class DTTNetModel:
 	def _prepare_input(self, waveform: np.ndarray) -> np.ndarray:
 		"""Ensure the mixture tensor is shaped (channels, samples)."""
 		if waveform.ndim == 1: # Mono
-			mix = np.stack([waveform, waveform], axis=0)
+			mix = np.stack([waveform, waveform], axis=0) # Duplicate to create fake stereo
 		elif waveform.ndim == 2: # Multi-channel
 			mix = waveform.T if waveform.shape[1] <= waveform.shape[0] else waveform # Model expects (channels, samples)
 			if mix.shape[0] == 1: # Single channel
