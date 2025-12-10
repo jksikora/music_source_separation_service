@@ -5,7 +5,7 @@ import pytest, io, torchaudio, asyncio, time
 
 # --- Endpoint tests ---
 
-# === Test upload_audio endpoint ===
+# === Test upload_audio Endpoint ===
 @pytest.mark.parametrize("model", ["scnet", "dttnet"])
 @pytest.mark.parametrize("sample_audio_file", ["WAV", "FLAC"], indirect=True) # Run test for both "WAV" and "FLAC" formats; indirect=True tells pytest to pass the param to the fixture not the test function
 def test_upload_audio(client, model, sample_audio_file):
@@ -26,7 +26,7 @@ def test_upload_audio(client, model, sample_audio_file):
             assert field in stem_info, f"[{model}] Field '{field}' missing in stem '{stem}' info" # Check if each expected field is present in the stem info
 
 
-# === Test download_audio endpoint ===
+# === Test download_audio Endpoint ===
 @pytest.mark.parametrize("model", ["scnet", "dttnet"])
 @pytest.mark.parametrize("sample_audio_file", ["WAV", "FLAC"], indirect=True) # Run test for both "WAV" and "FLAC" formats; indirect=True tells pytest to pass the param to the fixture not the test function
 def test_download_audio(client, model, sample_audio_file):
@@ -64,7 +64,7 @@ def test_download_audio(client, model, sample_audio_file):
     assert np.allclose(sum(stem_waveforms).numpy(), original_waveform.numpy(), atol=0.5), f"[{model}] Sum of stems does not closely match original audio" # Check if sum of all stems closely matches original audio (with tolerance)
 
 
-# === Test upload_audio endpoint with invalid file ===
+# === Test upload_audio Endpoint with Invalid File ===
 @pytest.mark.parametrize("invalid_sample_audio_file", ["txt", "png", "jpg", "svg", "mp4", "avi", "mov"], indirect=True) # Run test for every format; indirect=True tells pytest to pass the param to the fixture not the test function
 def test_upload_audio_invalid_file(client, invalid_sample_audio_file):
     """Testing upload_audio endpoint with invalid file
@@ -79,16 +79,18 @@ def test_upload_audio_invalid_file(client, invalid_sample_audio_file):
     assert data["detail"] == "Invalid audio file", f"Unexpected error message: {data['detail']}" #Check that the error message is as expected
 
 
-# === Test upload_audio endpoint with concurrent uploads ===
+# === Test upload_audio Endpoint with Concurrent Uploads ===
+@pytest.mark.parametrize("model", ["scnet", "dttnet"])
 @pytest.mark.asyncio
-async def test_upload_audio_concurrent_uploads(async_client, sample_audio_file):
+async def test_upload_audio_concurrent_uploads(async_client, model, sample_audio_file):
     """Testing concurrent uploads to check if the system handles multiple requests properly
-    1. Send two uploads at the same time
+    1. Send two upload requests at the same time
     2. Check if one upload succeeds and the other fails with expected error message"""
+
     audio_bytes, _, _ = sample_audio_file
     files = {'file': ('test.wav', audio_bytes, 'audio/wav')}
-    task1 = async_client.post("/upload_audio/scnet", files=files) # Using scnet model but could be any
-    task2 = async_client.post("/upload_audio/scnet", files=files) # Must match the above
+    task1 = async_client.post(f"/upload_audio/{model}", files=files, timeout=60.0)
+    task2 = async_client.post(f"/upload_audio/{model}", files=files, timeout=60.0)
     response1, response2 = await asyncio.gather(task1, task2) # Send two upload requests concurrently
 
     statuses = {response1.status_code, response2.status_code}
@@ -102,7 +104,33 @@ async def test_upload_audio_concurrent_uploads(async_client, sample_audio_file):
 
     fail_response = response1 if response1.status_code == 503 else response2 # The failed one should have no_available_workers error
     fail_data = fail_response.json()
-    assert fail_data['detail'] == "No available scnet workers", f"Unexpected error message: {fail_data['detail']}"
+    assert fail_data['detail'] == f"No available {model} workers", f"Unexpected error message: {fail_data['detail']}"
+
+
+# === Test upload_audio Endpoint with Parallel Uploads ===
+@pytest.mark.asyncio
+async def test_upload_audio_parallel_uploads(async_client, sample_audio_file):
+    """Testing parallel uploads with both scnet and dttnet models to check if the system handles multiple models properly
+    1. Send upload requests to both models at the same time
+    2. Check if both requests complete successfully
+    3. Check if both responses contain expected stems"""
+
+    audio_bytes, _, _ = sample_audio_file
+    files = {'file': ('test.wav', audio_bytes, 'audio/wav')}
+    task_scnet = async_client.post("/upload_audio/scnet", files=files, timeout=60.0)
+    task_dttnet = async_client.post("/upload_audio/dttnet", files=files, timeout=60.0)
+    response_scnet, response_dttnet = await asyncio.gather(task_scnet, task_dttnet) # Send two upload requests to both models concurrently
+    
+    assert response_scnet.status_code == 200, f"[scnet] Unexpected status code: {response_scnet.status_code}" # Check if scnet response is successful
+    assert response_dttnet.status_code == 200, f"[dttnet] Unexpected status code: {response_dttnet.status_code}" # Check if dttnet response is successful
+    
+    data_scnet = response_scnet.json()
+    data_dttnet = response_dttnet.json()
+    
+    expected_stems = {"vocals", "drums", "bass", "other"}
+    for stem in expected_stems:
+        assert stem in data_scnet, f"[scnet] Stem '{stem}' not found in response"
+        assert stem in data_dttnet, f"[dttnet] Stem '{stem}' not found in response"
 
 
 # === Test download_audio endpoint with invalid file_id ===
@@ -116,6 +144,7 @@ def test_download_audio_invalid_id(client):
     assert response.status_code == 404, f"Unexpected status code: {response.status_code}"
     data = response.json()
     assert data["detail"] == "File not found", f"Unexpected error message: {data['detail']}" #Check that the error message is as expected
+
 
 # --- Service tests ---
 
