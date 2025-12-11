@@ -23,20 +23,24 @@ client = httpx.Client(base_url=f"http://{main_address}", timeout=600.0) # Increa
 
 
 # === Prepare Results Directory and CSV Files for Separation Quality Test Results ===
-results_dir = "tests/performance/scnet_results/separation_quality"
+results_dir = "tests/performance/separation_quality"
 os.makedirs(results_dir, exist_ok=True)  # Create results directory if it doesn't exist; exist_ok=True avoids error if it already exists
-csv_frames = os.path.join(results_dir, "docker_agg_frames_separation_quality_results.csv") # Complete path to aggregated frame-level separation quality results CSV file
-csv_tracks = os.path.join(results_dir, "docker_agg_tracks_separation_quality_results.csv") # Complete path to aggregated track-level separation quality results CSV file
 
-if not os.path.exists(csv_frames):
-    with open(csv_frames, "w", newline="") as cf:
-        writer = csv.writer(cf)
-        writer.writerow(["Filename", "Stem", "SDR", "SIR", "SAR", "ISR"])
+def get_result_files(prefix: str):
+    csv_frames = os.path.join(results_dir, f"{prefix}_agg_frames_separation_quality_results.csv") # Complete path to aggregated frame-level separation quality results CSV file
+    csv_tracks = os.path.join(results_dir, f"{prefix}_agg_tracks_separation_quality_results.csv") # Complete path to aggregated track-level separation quality results CSV file
 
-if not os.path.exists(csv_tracks):
-    with open(csv_tracks, "w", newline="") as cf:
-        writer = csv.writer(cf)
-        writer.writerow(["Stem", "SDR", "SIR", "SAR", "ISR"])
+    if not os.path.exists(csv_frames):
+        with open(csv_frames, "w", newline="") as cf:
+            writer = csv.writer(cf)
+            writer.writerow(["Filename", "Stem", "SDR", "SIR", "SAR", "ISR"])
+
+    if not os.path.exists(csv_tracks):
+        with open(csv_tracks, "w", newline="") as cf:
+            writer = csv.writer(cf)
+            writer.writerow(["Stem", "SDR", "SIR", "SAR", "ISR"])
+
+    return csv_frames, csv_tracks
 
 
 # === Convert Audio to Bytes Helper Function ===
@@ -48,7 +52,7 @@ def _audio_to_bytes(audio: np.ndarray, sample_rate: int) -> bytes:
 
 
 # === Test Separation Quality Function ===
-def test_separation_quality() -> None:
+def test_separation_quality(model: str, prefix: str) -> None:
     results = museval.EvalStore() # Initialize EvalStore to hold separation quality results
     for track in mus.tracks:  # Limit to first n songs by adding [:n]
         try: # Added try-except to allow saving partial results
@@ -56,7 +60,7 @@ def test_separation_quality() -> None:
             
             input_audio_bytes = _audio_to_bytes(track.audio, track.rate) # Convert musdb mixture from numpy.ndarray to bytes
             files = {'file': (f'{track.name}.wav', input_audio_bytes, 'audio/wav')}
-            upload_response = client.post("/upload_audio", files=files)
+            upload_response = client.post(f"/upload_audio/{model}", files=files)
 
             if upload_response.status_code != 200:
                 raise RuntimeError(f"unexpected status code from upload_audio endpoint response: {upload_response.status_code} for file: {track.name}")
@@ -79,28 +83,26 @@ def test_separation_quality() -> None:
             scores = museval.eval_mus_track(track, estimates, output_dir=results_dir) # Evaluate separation quality track by track and save results to json files
             results.add_track(scores) # Add scores to EvalStore to have overall results in pandas dataframe and to aggregate metrics (median, mean / by frame, stem, tracks)
 
-        except Exception as e: # If the server stops or any error occurs during measurement, save collected results
+        except (httpx.RequestError, RuntimeError, Exception, KeyboardInterrupt) as e: # If the server stops or any error occurs during measurement, save collected results
             print(f"evaluation failed for: {track.name} with error: {e}")
             
             if len(results.df) > 0:
                 print("saving results after interruption")
                 try:
-                    results.save(os.path.join(results_dir, "docker_separation_quality_results.pandas")) # Save EvalStore results for later analysis
-                    agg_frames_to_csv(csv_frames)
-                    agg_tracks_to_csv(csv_tracks)
+                    results.save(os.path.join(results_dir, f"{prefix}_separation_quality_results.pandas")) # Save EvalStore results for later analysis
                 except Exception as e:
                     print(f"failed to save partial results, error: {e}")
             else:
                 print("no results to save after interruption")
             break
 
-    results.save(os.path.join(results_dir, "docker_separation_quality_results.pandas")) # Save EvalStore results for later analysis
+    results.save(os.path.join(results_dir, f"{prefix}_separation_quality_results.pandas")) # Save EvalStore results for later analysis
 
 
 # === Save Overall Results Aggregated by Frames to CSV Function ===
-def agg_frames_to_csv(csv_frames: str) -> None:
+def agg_frames_to_csv(csv_frames: str, prefix: str) -> None:
     results = museval.EvalStore() # Initialize EvalStore to hold separation quality results
-    results_path = os.path.join(results_dir, "docker_separation_quality_results.pandas") # Path to saved EvalStore results
+    results_path = os.path.join(results_dir, f"{prefix}_separation_quality_results.pandas") # Path to saved EvalStore results
     results.load(results_path) # Load previously saved EvalStore results
     try:
         dataframe = results.agg_frames_scores() # Get aggregated frame-level scores (one metric per stem per track)
@@ -123,9 +125,9 @@ def agg_frames_to_csv(csv_frames: str) -> None:
 
 
 # === Save Overall Results Aggregated by Tracks to CSV Function ===
-def agg_tracks_to_csv(csv_tracks: str) -> None:
+def agg_tracks_to_csv(csv_tracks: str, prefix: str) -> None:
     results = museval.EvalStore() # Initialize EvalStore to hold separation quality results
-    results_path = os.path.join(results_dir, "docker_separation_quality_results.pandas") # Path to saved EvalStore results
+    results_path = os.path.join(results_dir, f"{prefix}_separation_quality_results.pandas") # Path to saved EvalStore results
     results.load(results_path) # Load previously saved EvalStore results
     try:
         dataframe = results.agg_frames_tracks_scores() # Get aggregated track-level scores (one metric per stem)
@@ -147,6 +149,8 @@ def agg_tracks_to_csv(csv_tracks: str) -> None:
 
 # === Main Execution Block ===
 if __name__ == "__main__":
-    test_separation_quality()
-    agg_frames_to_csv(csv_frames)
-    agg_tracks_to_csv(csv_tracks)
+    prefix = "scnet"
+    csv_frames, csv_tracks = get_result_files(prefix)
+    test_separation_quality("scnet", prefix)
+    agg_frames_to_csv(csv_frames, prefix)
+    agg_tracks_to_csv(csv_tracks, prefix)

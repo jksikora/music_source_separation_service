@@ -24,26 +24,30 @@ client = httpx.Client(base_url=f"http://{main_address}", timeout=600.0) # Increa
 
 
 # === Prepare Results Directory and CSV Files for Separation Speed Test Results ===
-results_dir = "tests/performance/scnet_results/separation_speed"
+results_dir = "tests/performance/separation_speed"
 os.makedirs(results_dir, exist_ok=True)  # Create results directory if it doesn't exist; exist_ok=True avoids error if it already exists
-csv_client = os.path.join(results_dir, "docker_client_separation_speed_results_1_3.csv") # Complete path to client separation speed results CSV file
-csv_model = os.path.join(results_dir, "docker_model_separation_speed_results_1_3.csv") # Complete path to model separation speed results CSV file
-agg_csv_client = os.path.join(results_dir, "docker_agg_client_separation_speed_results_1_3.csv") # Complete path to aggregated client separation speed results CSV file
-agg_csv_model = os.path.join(results_dir, "docker_agg_model_separation_speed_results_1_3.csv") # Complete path to aggregated model separation speed results CSV file
 
-if not os.path.exists(csv_client):
-    with open(csv_client, "w", newline="") as cf:
-        writer = csv.writer(cf)
-        writer.writerow(["Filename", "Run idx", "Fragment [s]", "Time [s]"])
+def get_result_files(prefix: str):
+    csv_client = os.path.join(results_dir, f"{prefix}_client_separation_speed_results.csv") # Complete path to client separation speed results CSV file
+    csv_model = os.path.join(results_dir, f"{prefix}_model_separation_speed_results.csv") # Complete path to model separation speed results CSV file
+    agg_csv_client = os.path.join(results_dir, f"{prefix}_agg_client_separation_speed_results.csv") # Complete path to aggregated client separation speed results CSV file
+    agg_csv_model = os.path.join(results_dir, f"{prefix}_agg_model_separation_speed_results.csv") # Complete path to aggregated model separation speed results CSV file
 
-if not os.path.exists(csv_model):
-    with open(csv_model, "w", newline="") as cf:
-        writer = csv.writer(cf)
-        writer.writerow(["Filename", "Run idx", "Fragment [s]", "Time [s]"])
+    if not os.path.exists(csv_client):
+        with open(csv_client, "w", newline="") as cf:
+            writer = csv.writer(cf)
+            writer.writerow(["Filename", "Run idx", "Fragment [s]", "Time [s]"])
+
+    if not os.path.exists(csv_model):
+        with open(csv_model, "w", newline="") as cf:
+            writer = csv.writer(cf)
+            writer.writerow(["Filename", "Run idx", "Fragment [s]", "Time [s]"])
+    
+    return csv_client, csv_model, agg_csv_client, agg_csv_model
 
 
 # === Prepare Model with Warmup Function ===
-def warmup_separation(client: httpx.Client) -> None:
+def warmup_separation() -> None:
     sample_rate = 44100
     duration = 1.0
     amplitude = 0.5
@@ -55,11 +59,12 @@ def warmup_separation(client: httpx.Client) -> None:
     buffer.seek(0)
     audio_bytes = buffer.read()
     files = {'file': ('warmup.wav', audio_bytes, 'audio/wav')}
-    response = client.post("/upload_audio", files=files)
-    if response.status_code != 200:
-        print(f"warmup request failed with status code: {response.status_code}")
-        return
-    print(f"warmup request completed with status code: {response.status_code}")
+    for model in ["scnet", "dttnet"]:
+        response = client.post(f"/upload_audio/{model}", files=files)
+        if response.status_code != 200:
+            print(f"warmup request failed with status code: {response.status_code}")
+        else:
+            print(f"warmup request completed with status code: {response.status_code}")
 
 
 # === Collect Audio Files Paths from Database Function ===
@@ -76,11 +81,11 @@ def _load_audio_fragments(filename: str, file_path: str) -> list[int]:
     waveform, sample_rate = sf.read(file_path, dtype="float32")
     samples_num = waveform.shape[0]
     duration = samples_num / sample_rate
-    max_length_sec = int(math.floor(duration / 10.0) * 10) # Divide duration into segments of 10 seconds, round down to get max length divisible by 10 and multiply by 10 to get max length in seconds
-    if max_length_sec < 10:
-        raise ValueError(f"audio file {filename} is shorter than 10 seconds.")
+    max_length_sec = int(math.floor(duration / 30.0) * 30) # Divide duration into segments of 30 seconds, round down to get max length divisible by 30 and multiply by 30 to get max length in seconds
+    if max_length_sec < 30:
+        raise ValueError(f"audio file {filename} is shorter than 30 seconds.")
 
-    fragments = list(range(10, max_length_sec + 1, 10)) # Create list of fragment lengths: 10,20,... up to max_length_sec (exclusive so +1)
+    fragments = list(range(30, max_length_sec + 1, 30)) # Create list of fragment lengths: 30,60,... up to max_length_sec (exclusive so +1)
     print(f"loaded file: {filename}, duration: {duration:.2f}s, fragments: {fragments}")
 
     return fragments, waveform, sample_rate, samples_num
@@ -95,7 +100,7 @@ def _convert_to_bytes(waveform, sample_rate):
 
 
 # === Test Separation Speed Function ===
-def test_separation_speed(client: httpx.Client) -> list[tuple[str, dict[int, list[float]]]]:
+def test_separation_speed(model: str, prefix: str) -> list[tuple[str, dict[int, list[float]]]]:
     results_per_song_client = []  
     results_per_song_model = []  
     files = _collect_files(db_path)
@@ -111,7 +116,7 @@ def test_separation_speed(client: httpx.Client) -> list[tuple[str, dict[int, lis
         rng = random.Random(filename)  # Seed random number generator with filename for reproducibility
         for fragment in fragments:
             fragment_samples = int(fragment * sample_rate)
-            for i in range(15): # Set number of runs, now: 15 measurements per fragment length
+            for i in range(5): # Set number of runs, now: 5 measurements per fragment length
                 max_start_idx = samples_num - fragment_samples # Maximum possible start index for fragment
                 if max_start_idx <= 0:
                     start = 0
@@ -124,7 +129,7 @@ def test_separation_speed(client: httpx.Client) -> list[tuple[str, dict[int, lis
 
                 try: # Added try-except to allow saving partial results
                     t0_client = time.time()
-                    upload_response = client.post("/upload_audio", files=files)
+                    upload_response = client.post(f"/upload_audio/{model}", files=files)
                     t1_client = time.time()
                     if upload_response.status_code != 200:
                         raise RuntimeError(f"unexpected status code from upload_audio endpoint response: {upload_response.status_code} for file: {filename}, fragment: {fragment}s")
@@ -146,23 +151,16 @@ def test_separation_speed(client: httpx.Client) -> list[tuple[str, dict[int, lis
                         raise RuntimeError(f"inference timestamps not provided for file: {filename}, fragment: {fragment}s, run: {i+1}")
                     time.sleep(0.5) # Short sleep to avoid overwhelming the server
 
-                except (httpx.RequestError, RuntimeError, Exception) as e: # If the server stops or any error occurs during measurement, save collected results
+                except (httpx.RequestError, RuntimeError, Exception, KeyboardInterrupt) as e: # If the server stops or any error occurs during measurement, save collected results
                     print(f"measurement interrupted for file {filename}, fragment {fragment}s, run {i+1}: {e}")
 
                     if results_per_song_client or results_per_song_model:
                         print("saving results after interruption")
-                        try:
-                            results_to_csv(csv_client, results_per_song_client)
-                            results_to_csv(csv_model, results_per_song_model)
-                            aggregate_results_to_csv(csv_client, agg_csv_client)
-                            aggregate_results_to_csv(csv_model, agg_csv_model)
-
-                        except Exception as e:
-                            print(f"failed to save partial results, error: {e}")
+                        return results_per_song_client, results_per_song_model
+                    
                     else:
                         print("no results to save after interruption")
-                            
-                    return results_per_song_client, results_per_song_model
+                        break
                 
         results_per_song_client.append((filename, timings_client))
         results_per_song_model.append((filename, timings_model))
@@ -216,8 +214,10 @@ def aggregate_results_to_csv(csv_input: str, csv_output: str) -> None:
 
 # === Main Execution Block ===
 if __name__ == "__main__":
-    warmup_separation(client)
-    results_client, results_model = test_separation_speed(client)
+    prefix = "dttnet"
+    warmup_separation()
+    csv_client, csv_model, agg_csv_client, agg_csv_model = get_result_files(prefix)
+    results_client, results_model = test_separation_speed("dttnet", prefix)
     results_to_csv(csv_client, results_client)
     results_to_csv(csv_model, results_model)
     aggregate_results_to_csv(csv_client, agg_csv_client)
