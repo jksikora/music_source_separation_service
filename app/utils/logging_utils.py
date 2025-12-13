@@ -6,6 +6,7 @@ RED = '\033[91m'
 GREEN = '\033[92m'
 YELLOW = '\033[93m'
 BLUE = '\033[94m'
+ORANGE = '\033[38;5;208m'
 CYAN = '\033[96m'
 GRAY = '\033[90m'
 RESET = '\033[0m'
@@ -24,6 +25,7 @@ STATUS_COLORS = { # A dictionary mapping status values to their corresponding AN
     'success': GREEN,
     'in progress': YELLOW,
     'failed': RED,
+    'fallback': ORANGE
 }
 
 _LEVELS = { # A dictionary mapping human-readable level names (strings) to Python logging constants (integers) 

@@ -8,6 +8,8 @@ services:
       - "8000:8000" # Change left for different port on host machine; Change right for different port services communicate within the docker network (also update worker config .yaml files)
     environment: # Variables injected into the container environment
       - SCNET01_ADDRESS=http://scnet01:8101 # For future use if needed (potentially replacing .yaml file configuration and improving registration process)
+      - DTTNET01_ADDRESS=http://dttnet01:8201
+      - DOCKER_RUNNING=true # Indicate that the service is running inside Docker
 
   scnet01: # Service name (it will be refered as "scnet" inside the docker network)
     container_name: scnet_worker # Container name on the host machine (for easier identification)
@@ -21,5 +23,22 @@ services:
       - WORKER_TYPE=scnet 
       - WORKER_ADDRESS=http://scnet01:8101 # For future use if needed (potentially replacing .yaml file configuration and improving registration process)
       - MAIN_ADDRESS=http://main:8000 # Reachable with os.getenv("MAIN_ADDRESS")
+      - DOCKER_RUNNING=true # Indicate that the service is running inside Docker      
+    depends_on: 
+      - main # Ensure main service is started before this one
+
+  dttnet01: # Service name (it will be refered as "dttnet" inside the docker network)
+    container_name: dttnet_worker # Container name on the host machine (for easier identification)
+    build: # Tell docker-compose how to build the image for this service
+      context: . # Use the current project folder (.) as the place where COPY will pull files from
+      dockerfile: Dockerfile.dttnet # Use Dockerfile.main image to build this service
+    ports: # Port mapping from host (left; machine running Docker) to container (right)
+      - "8201:8201" # Change left for different port on host machine; Change right for different port services communicate within the docker network (also update worker config .yaml files)
+    environment: # Variables injected into the container environment 
+      - WORKER_ID=dttnet01
+      - WORKER_TYPE=dttnet 
+      - WORKER_ADDRESS=http://dttnet01:8201 # For future use if needed (potentially replacing .yaml file configuration and improving registration process)
+      - MAIN_ADDRESS=http://main:8000 # Reachable with os.getenv("MAIN_ADDRESS")
+      - DOCKER_RUNNING=true # Indicate that the service is running inside Docker
     depends_on: 
       - main # Ensure main service is started before this one

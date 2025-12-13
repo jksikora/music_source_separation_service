@@ -14,3 +14,10 @@ services:
       - ./workers/utils:/music_source_separation/workers/utils
       - ./app/utils:/music_source_separation/app/utils
     command: ["uvicorn", "workers.scnet.scnet_worker:app", "--host", "0.0.0.0", "--port", "8101", "--reload"]
+
+  dttnet01: # Service name (it will be refered as "dttnet" inside the docker network)
+    volumes: # Overwrite app code in the image with local code to enable live changes without rebuilding the image for development purposes; Notation: "container directory : mount directory"
+      - ./workers/dttnet:/music_source_separation/workers/dttnet # Mount entire dttnet worker folder replacing the one in the image etc.
+      - ./workers/utils:/music_source_separation/workers/utils
+      - ./app/utils:/music_source_separation/app/utils
+    command: ["uvicorn", "workers.dttnet.dttnet_worker:app", "--host", "0.0.0.0", "--port", "8201", "--reload"]  

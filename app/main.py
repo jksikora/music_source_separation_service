@@ -10,6 +10,7 @@ import asyncio
 async def lifespan(app: FastAPI):
     """On startup check if SCNet worker config file exists and attempt registration"""
     asyncio.create_task(try_register_request("scnet", 1)) # Attempt to register SCNet worker on startup
+    asyncio.create_task(try_register_request("dttnet", 1)) # Attempt to register DTTNet worker on startup
     yield # Pauses here; Code after yield runs on shutdown
 
 

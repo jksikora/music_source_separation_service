@@ -33,9 +33,10 @@ COPY requirements_main.txt ./requirements_main.txt
 RUN pip install --no-cache-dir -r ./requirements_main.txt
 
 
-# Copy main service code into music_source_separation/app directory in the image
+# Copy main service code into music_source_separation/app directory in the image and workers' config files
 COPY app/ ./app/
-
+COPY workers/scnet/scnet1_config.yaml ./workers/scnet/scnet1_config.yaml
+COPY workers/dttnet/dttnet1_config.yaml ./workers/dttnet/dttnet1_config.yaml
 
 # Expose main port 8000 to document it; actual port mapping is done during docker run
 EXPOSE 8000

@@ -1,9 +1,7 @@
-from __future__ import annotations
-from fastapi import HTTPException, UploadFile
+from fastapi import UploadFile, HTTPException
 from src.dp_tdf.dp_tdf_net import DPTDFNet
 from src.evaluation.separate import no_overlap_inference, overlap_inference  
 from app.utils.logging_utils import get_logger
-from typing import Dict
 from pathlib import Path
 import numpy as np
 import soundfile as sf
@@ -19,18 +17,18 @@ class DTTNetModel:
 		self.worker_id = worker_id
 		self.inference_lock = asyncio.Lock()
 		
-		spec = importlib.util.find_spec("src") # Check if DTTNet package is importable
+		spec = importlib.util.find_spec("src.evaluation") # Check if DTTNet package is importable
 		if spec is None:
 			raise ImportError("DTTNet package not found")
 		
-		self.dttnet_root = Path(spec.submodule_search_locations[0]).resolve().parent # Get DTTNet package root
+		self.dttnet_root = Path(spec.submodule_search_locations[0]).resolve().parent.parent # Get DTTNet package root
 		self.model_config_path = str(self.dttnet_root / "configs" / "model") # Path to DTTNet default config
 		self.infer_config_path = str(self.dttnet_root / "configs" / "evaluation.yaml") # Path to DTTNet default config
 		self.worker_root = Path(__file__).resolve().parents[0] # Get the project root
 		self.checkpoint_path = str(self.worker_root / "checkpoints") # Path to DTTNet checkpoints folder
 
 		self.sources = {"bass", "drums", "other", "vocals"}  # Default targets
-		self.models: Dict[str, DPTDFNet] = {}
+		self.models: dict[str, DPTDFNet] = {}
 		self.loaded = False
 		
 		with open(self.infer_config_path, "r") as f: # Load DTTNet config file
@@ -48,7 +46,7 @@ class DTTNetModel:
 				logger.info(action="device_selection", status="success", data={"requested_device": cfg_device, "selected_device": str(device)})
 				return device
 			except Exception as e:
-				logger.warning(action="device_selection", status="failed", data={"requested_device": cfg_device, "fallback_device": "cpu", "error": str(e)})	
+				logger.warning(action="device_selection", status="fallback", data={"requested_device": cfg_device, "fallback_device": "cpu", "error": str(e)})	
 				return torch.device("cpu")
 
 		self.device = _select_device(infer_cfg.get("device"))
@@ -88,8 +86,8 @@ class DTTNetModel:
 		mix = self._prepare_input(waveform)
 
 		def _run_separation(mix: np.ndarray, sample_rate: int): # Additional function to run separation for time measurement
-			outputs: Dict[str, np.ndarray] = {} # Store separated waveforms
-			sample_rates: Dict[str, int] = {} # Store sample rates for each stem
+			outputs: dict[str, np.ndarray] = {} # Store separated waveforms
+			sample_rates: dict[str, int] = {} # Store sample rates for each stem
 			t0_model = time.time() 
 			
 			for source, model in self.models.items(): # Run inference for each source
@@ -132,4 +130,4 @@ class DTTNetModel:
     # === Check if Model is Loaded ===
 	def is_loaded(self) -> bool:
 		"""Check if the DTTNet models are loaded and ready for inference."""
-		return self.loaded and bool(self.models)
+		return self.loaded and self.sources == set(self.models.keys()) # Ensure all sources have loaded models

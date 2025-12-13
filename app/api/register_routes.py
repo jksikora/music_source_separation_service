@@ -3,7 +3,7 @@ from app.services.session_manager import session_manager
 from app.schemas.worker_schemas import Worker
 from app.utils.logging_utils import get_logger
 from app.utils.config_utils import load_worker_config
-import httpx, asyncio
+import httpx, asyncio, time
 
 register_router = APIRouter() # Create API router for register routes
 logger = get_logger(__name__) # Logger for register_routes module
@@ -13,45 +13,32 @@ logger = get_logger(__name__) # Logger for register_routes module
 @register_router.post("/register_worker")
 async def register_worker(worker_data: Worker) -> None:
     """Endpoint for workers to register themselves in Session Manager"""
-    backoff = 0.5
-    max_backoff = 2.0
-    deadline = 5.0
-    elapsed = 0.0
-    last_error = None
-    while elapsed < deadline: # Retry loop with deadline for more robust checking if model is loaded (in case long model load times)
-        try: # Check if the worker's model is loaded before registering
-            async with httpx.AsyncClient(timeout=2) as client:  # Short timeout for quick check maintaining service responsiveness
-                response = await client.get(f"http://{worker_data.worker_address}/loaded") # Use /loaded endpoint to check if model is loaded
-                if response.status_code == 200:
-                    break
-        except httpx.RequestError as exc:
-            last_error = str(exc)
-        await asyncio.sleep(backoff)
-        elapsed += backoff
-        backoff = min(backoff * 1.5, max_backoff)  # Exponential backoff until max 2 seconds
-    else:
-        logger.warning(action="worker_registration", status="failed", data={"worker_id": worker_data.worker_id, "error": "is_loaded_check_failed", "details": last_error})
-        raise HTTPException(status_code=503, detail="Unable to verify worker model status")
-
-    try:
-        await session_manager.register_worker(
-            worker_id=worker_data.worker_id,
-            model_type=worker_data.model_type,
-            worker_address=worker_data.worker_address
-        )
-        logger.info(action="worker_registration", status="success", data={"worker_id": worker_data.worker_id, "model_type": worker_data.model_type, "worker_address": worker_data.worker_address})
-    except Exception as exc:
-        logger.exception(action="worker_registration", status="failed", data={"worker_id": worker_data.worker_id, "status_code": 500, "error": str(exc)})
-        raise HTTPException(status_code=500, detail="Worker registration failed")
+    try: # Check if the worker's model is loaded before registering
+        async with httpx.AsyncClient(timeout=2) as client: # Short timeout for quick check maintaining service responsiveness
+            response = await client.get(f"http://{worker_data.worker_address}/loaded") # Use /loaded endpoint to check if model is loaded
+            if response.status_code == 200:
+                logger.info(action="worker_is_loaded_check", status="success", data={"worker_id": worker_data.worker_id, "model_type": worker_data.model_type})
+            else:
+                logger.warning(action="worker_is_loaded_check", status="failed", data={"worker_id": worker_data.worker_id, "model_type": worker_data.model_type, "error": "model_not_loaded", "details": response.text})
+                raise HTTPException(status_code=503, detail="Worker's model is not loaded")
+    except httpx.RequestError as e:
+        logger.warning(action="worker_is_loaded_check", status="failed", data={"worker_id": worker_data.worker_id, "model_type": worker_data.model_type, "error": "is_loaded_check_failed", "details": str(e)})
+        raise HTTPException(status_code=503, detail="Unable to verify worker's model status")
+    
+    await session_manager.register_worker(
+        worker_id=worker_data.worker_id,
+        model_type=worker_data.model_type,
+        worker_address=worker_data.worker_address
+    )
 
 
-# === Try Register SCNet Worker Function ===
+# === Try Register Worker Function ===
 async def try_register_request(model: str, serial_number: int) -> None:
-    """Function to attempt registering SCNet worker in Session Manager if config file exists"""
+    """Function to attempt registering worker - single try (workers handle retries)"""
     try:
         worker_config = load_worker_config(model, serial_number)
-    except (FileNotFoundError, ValueError) as exc:
-        logger.warning(action="registration_request", status="failed", data={"error": "invalid_worker_config", "details": str(exc)})
+    except (FileNotFoundError, ValueError) as e:
+        logger.warning(action="registration_request", status="failed", data={"error": "invalid_worker_config", "details": str(e)})
         return
 
     try:
@@ -61,6 +48,5 @@ async def try_register_request(model: str, serial_number: int) -> None:
             logger.info(action="registration_request", status="success", data={"address": worker_config.worker_address})
         else:
             logger.warning(action="registration_request", status="failed", data={"address": worker_config.worker_address, "status_code": response.status_code, "error": response.text})
-
-    except Exception as exc:
-        logger.warning(action="registration_request", status="failed", data={"address": worker_config.worker_address, "status_code": 500, "error": str(exc)})
+    except httpx.RequestError as e:
+        logger.warning(action="registration_request", status="failed", data={"address": worker_config.worker_address, "status_code": 500, "error": str(e)})

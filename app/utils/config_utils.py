@@ -1,6 +1,6 @@
 from app.schemas.worker_schemas import WorkerConfig
 from pathlib import Path
-import yaml
+import yaml, os
 
 # === Load Worker Configuration Function ===
 def load_worker_config(model: str, serial_number: int) -> WorkerConfig:
@@ -12,11 +12,12 @@ def load_worker_config(model: str, serial_number: int) -> WorkerConfig:
     with open(config_path, "r", encoding="utf-8") as f: # Open worker config file using UTF-8 encoding for compatibility with different systems
         data = yaml.safe_load(f) or {} # Load YAML content safely, return empty dict if file is empty so the check below works correctly
 
-    for field in ["main_address", "worker_address"]:
-        if isinstance(data.get(field), str) and ":" in data[field]:  # When the config contains the compose service name, 
-            service, port = data[field].split(":", 1) # translate it to the host address so tests can connect to the published port (localhost)
-            if service in ["main", "scnet01", "dttnet01"]:  # Add other services as needed
-                data[field] = f"127.0.0.1:{port}"
+    if not os.getenv("DOCKER_RUNNING"):  # If not running inside Docker (running locally), adjust addresses for localhost access
+        for field in ["main_address", "worker_address"]:
+            if isinstance(data.get(field), str) and ":" in data[field]:  # When the config contains the compose service name, 
+                service, port = data[field].split(":", 1) # translate it to the host address so tests can connect to the published port (localhost)
+                if service in ["main", "scnet01", "dttnet01"]:  # Add other services as needed
+                    data[field] = f"127.0.0.1:{port}"
 
     required_fields = ("worker_id", "model_type", "worker_address", "main_address") # Define required fields for worker configuration
     missing = [k for k in required_fields if not data.get(k)] # Check for missing or empty required fields

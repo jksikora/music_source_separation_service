@@ -13,8 +13,12 @@ class SessionManager:
     async def register_worker(self, worker_id: str, model_type: str, worker_address: str) -> None:
         """Function to register a new worker in storage"""
         async with self._lock: # Acquire lock for thread-safe operation
+            if worker_id in self._workers: # Check if worker already registered (prevent duplicates)
+                self._logger.warning(action="worker_registration", status="failed", data={"worker_id": worker_id, "model_type": model_type, "worker_address": worker_address, "error": "worker_already_registered"})
+                return
+            
             self._workers[worker_id] = WorkerData(worker_id = worker_id, model_type = model_type, worker_address = worker_address) # Add worker to storage using defined structure
-            self._logger.info(action="worker_registration", status="in progress", data={"worker_id": worker_id, "model_type": model_type, "worker_address": worker_address})
+            self._logger.info(action="worker_registration", status="success", data={"worker_id": worker_id, "model_type": model_type, "worker_address": worker_address})
 
     async def get_worker(self, model_type: str) -> WorkerData | None:
         """Function to acquire an available worker from storage"""

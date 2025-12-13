@@ -1,9 +1,10 @@
 fastapi==0.121.0
 uvicorn==0.38.0
+torch==2.9.0
 python-multipart==0.0.20
 httpx==0.28.1
 PyYAML==6.0.3
 numpy==1.26.4
 soundfile==0.12.1
 zipstream-ng==1.9.0
--e git+https://github.com/jksikora/SCNet.git#egg=scnet
+-e git+https://github.com/jksikora/DTTNet-Pytorch.git#egg=dttnet
