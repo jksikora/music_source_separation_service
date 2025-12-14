@@ -18,7 +18,7 @@ app = FastAPI(title = "Music Source Separation Service", lifespan=lifespan)
 
 app.include_router(audio_router) # Include audio processing API routes
 app.include_router(register_router) # Include worker registration API routes
-setup_logging("DEBUG") # Setup logging configuration
+setup_logging() # Setup logging configuration
 logger = get_logger(__name__)  # Logger for main module
 
 

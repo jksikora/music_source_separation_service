@@ -149,7 +149,7 @@ def agg_tracks_to_csv(csv_tracks: str, prefix: str) -> None:
 
 # === Main Execution Block ===
 if __name__ == "__main__":
-    prefix = "scnet"
+    prefix = ""
     csv_frames, csv_tracks = get_result_files(prefix)
     test_separation_quality("scnet", prefix)
     agg_frames_to_csv(csv_frames, prefix)

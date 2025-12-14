@@ -6,7 +6,7 @@ services:
   main: # Service name (it will be refered as "main" inside the docker network)
     volumes: # Overwrite app code in the image with local code to enable live changes without rebuilding the image for development purposes; Notation: "container directory : mount directory"
       - ./app:/music_source_separation/app # Mount entire app folder replacing the one in the image
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"] # For development purposes - uncomment to enable auto-reload on code changes
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"] # '--port' should match the one in docker-compose.yml
 
   scnet01: # Service name (it will be refered as "scnet" inside the docker network)
     volumes: # Overwrite app code in the image with local code to enable live changes without rebuilding the image for development purposes; Notation: "container directory : mount directory"

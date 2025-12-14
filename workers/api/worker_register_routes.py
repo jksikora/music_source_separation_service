@@ -55,7 +55,7 @@ async def try_register(worker_id: str, model_type: str, worker_address: str, mai
                 logger.warning(action="registration_attempt", status="in progress", data={"worker_id": worker_id, "status_code": response.status_code, "details": response.text})
         except httpx.RequestError as e:
             last_error = str(e) # Set error message for network/timeout errors
-            logger.warning(action="registration_attempt", status="in progress", data={"worker_id": worker_id, "error": str(e)})
+            logger.warning(action="registration_attempt", status="in progress", data={"worker_id": worker_id, "main_address": main_address, "status_code": 500, "error": str(e)})
         await asyncio.sleep(backoff) # Wait before retrying next registration attempt
         backoff = min(backoff * 1.5, max_backoff)  # Exponential backoff until max 2 seconds
     else:

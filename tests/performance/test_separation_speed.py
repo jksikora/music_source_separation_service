@@ -214,10 +214,10 @@ def aggregate_results_to_csv(csv_input: str, csv_output: str) -> None:
 
 # === Main Execution Block ===
 if __name__ == "__main__":
-    prefix = "dttnet"
+    prefix = ""
     warmup_separation()
     csv_client, csv_model, agg_csv_client, agg_csv_model = get_result_files(prefix)
-    results_client, results_model = test_separation_speed("dttnet", prefix)
+    results_client, results_model = test_separation_speed("scnet", prefix)
     results_to_csv(csv_client, results_client)
     results_to_csv(csv_model, results_model)
     aggregate_results_to_csv(csv_client, agg_csv_client)

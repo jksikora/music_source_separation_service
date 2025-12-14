@@ -22,7 +22,7 @@ async def register_worker(worker_data: Worker) -> None:
                 logger.warning(action="worker_is_loaded_check", status="failed", data={"worker_id": worker_data.worker_id, "model_type": worker_data.model_type, "error": "model_not_loaded", "details": response.text})
                 raise HTTPException(status_code=503, detail="Worker's model is not loaded")
     except httpx.RequestError as e:
-        logger.warning(action="worker_is_loaded_check", status="failed", data={"worker_id": worker_data.worker_id, "model_type": worker_data.model_type, "error": "is_loaded_check_failed", "details": str(e)})
+        logger.warning(action="worker_is_loaded_check", status="failed", data={"worker_id": worker_data.worker_id, "model_type": worker_data.model_type, "worker_address": worker_data.worker_address, "error": "is_loaded_check_failed", "details": str(e)})
         raise HTTPException(status_code=503, detail="Unable to verify worker's model status")
     
     await session_manager.register_worker(
