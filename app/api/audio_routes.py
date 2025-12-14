@@ -25,7 +25,7 @@ async def download_audio(file_id: str) -> StreamingResponse:
         logger.error(action="download_request", status="failed", data={"file_id": file_id, "status_code": 404, "error": "file_not_found"})
         raise HTTPException(status_code=404, detail="File not found") # Error if file ID not found
     
-    audio_data = await storage.get(file_id, audio_data.filename) # Retrieve the audio data from memory
+    audio_data = await storage.get(file_id) # Retrieve the audio data from memory
     filename = audio_data.filename
     waveform = audio_data.waveform
     sample_rate = audio_data.sample_rate 

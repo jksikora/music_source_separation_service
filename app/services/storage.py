@@ -46,10 +46,10 @@ class Storage(StorageInterface):
             self._storage[file_id] = AudioData(filename=filename, waveform=waveform, sample_rate=sample_rate)
             self._logger.info(action="audio_save", status="success", data={"file_id": file_id, "filename": filename}) 
     
-    async def get(self, file_id: str, filename: str) -> AudioData | None:
+    async def get(self, file_id: str) -> AudioData | None:
         """Function to get audio data from storage"""
         async with self._lock:
-            self._logger.info(action="audio_get", status="success", data={"file_id": file_id, "filename": filename})
+            self._logger.info(action="audio_get", status="success", data={"file_id": file_id})
             return self._storage.get(file_id)
     
     async def delete(self, file_id: str) -> None:
