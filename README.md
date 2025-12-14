@@ -37,16 +37,21 @@ model_type: dttnet
 worker_address: dttnet01:8201 # configure worker's port
 main_address: main:8000 # configure main's port
 ```
+5. run the **music source separation service**
+```bash
+python run_local.py
+```
+6. (optional) run each service individually
 
-5. run the **main** service
+run the **main** service
 ```bash
 uvicorn app.main:app --port <MAIN_PORT_FROM_CONFIG>
 ```
-6. run the **scnet_worker** service (in different terminal)
+run the **scnet_worker** service (in different terminal)
 ```bash
 uvicorn app.workers.scnet.scnet_worker:app --port <SCNET_WORKER_PORT_FROM_CONFIG>
 ```
-7. run the **dttnet_worker** service (in different terminal)
+run the **dttnet_worker** service (in different terminal)
 ```bash
 uvicorn app.workers.dttnet.dttnet_worker:app --port <DTTNET_WORKER_PORT_FROM_CONFIG>
 ```
