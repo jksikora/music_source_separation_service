@@ -72,7 +72,6 @@ async def _process_result(result_zip: io.BytesIO, filename: str) -> dict[str, Au
                     stem_filename = f"{stem_name}_{filename}"  # Filename for the stem
 
                     await storage.save(stem_file_id, stem_filename, output_waveform, output_sample_rate)  # Save stem audio data in storage
-                    logger.info(action="audio_save", status="success", data={"file_id": stem_file_id, "filename": stem_filename})
 
                     result[stem_name] = AudioEntry(  # Store separation result for the stem
                         file_id=stem_file_id,
@@ -103,8 +102,7 @@ async def music_source_separation(model: str, audiofile: dict = Depends(_audio_f
     if not worker:
         logger.warning(action="worker_acquisition", status="failed", data={"status_code": 503, "error": "no_available_workers"})
         raise HTTPException(status_code=503, detail=f"No available {model} workers")
-    logger.info(action="worker_acquisition", status="success", data={"worker_id": worker.worker_id, "model_type": worker.model_type})
-    
+   
     try:
         result_zip, t0_model, t1_model = await _get_result(worker, waveform, sample_rate, file.filename)
         result = await _process_result(result_zip, file.filename)  # Process the received ZIP file
@@ -123,4 +121,3 @@ async def music_source_separation(model: str, audiofile: dict = Depends(_audio_f
         
     finally:
         await session_manager.release_worker(worker.worker_id) # Release the worker back to the session manager
-        logger.info(action="worker_release", status="success", data={"worker_id": worker.worker_id, "model_type": worker.model_type})

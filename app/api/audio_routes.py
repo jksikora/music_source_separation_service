@@ -21,13 +21,11 @@ async def upload_audio(result: dict[str, AudioEntry] = Depends(music_source_sepa
 @audio_router.get("/download_audio/{file_id}")
 async def download_audio(file_id: str) -> StreamingResponse:
     """Endpoint to download processed audio file with file ID"""
-    logger.debug(action="download_request", status="success", data={"file_id": file_id})
     if not await storage.exists(file_id): # Check if file ID exists in storage
         logger.error(action="download_request", status="failed", data={"file_id": file_id, "status_code": 404, "error": "file_not_found"})
         raise HTTPException(status_code=404, detail="File not found") # Error if file ID not found
     
-    audio_data = await storage.get(file_id) # Retrieve the audio data from memory
-    logger.info(action="audio_get", status="success", data={"file_id": file_id, "filename": audio_data.filename})
+    audio_data = await storage.get(file_id, audio_data.filename) # Retrieve the audio data from memory
     filename = audio_data.filename
     waveform = audio_data.waveform
     sample_rate = audio_data.sample_rate 

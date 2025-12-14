@@ -10,6 +10,8 @@ services:
       - SCNET01_ADDRESS=http://scnet01:8101 # For future use if needed (potentially replacing .yaml file configuration and improving registration process)
       - DTTNET01_ADDRESS=http://dttnet01:8201
       - DOCKER_RUNNING=true # Indicate that the service is running inside Docker
+    depends_on: 
+      - scnet01 # Ensure main service is started before this one
 
   scnet01: # Service name (it will be refered as "scnet" inside the docker network)
     container_name: scnet_worker # Container name on the host machine (for easier identification)
@@ -24,8 +26,7 @@ services:
       - WORKER_ADDRESS=http://scnet01:8101 # For future use if needed (potentially replacing .yaml file configuration and improving registration process)
       - MAIN_ADDRESS=http://main:8000 # Reachable with os.getenv("MAIN_ADDRESS")
       - DOCKER_RUNNING=true # Indicate that the service is running inside Docker      
-    depends_on: 
-      - main # Ensure main service is started before this one
+
 
   dttnet01: # Service name (it will be refered as "dttnet" inside the docker network)
     container_name: dttnet_worker # Container name on the host machine (for easier identification)

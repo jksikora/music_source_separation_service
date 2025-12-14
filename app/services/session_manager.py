@@ -14,7 +14,7 @@ class SessionManager:
         """Function to register a new worker in storage"""
         async with self._lock: # Acquire lock for thread-safe operation
             if worker_id in self._workers: # Check if worker already registered (prevent duplicates)
-                self._logger.warning(action="worker_registration", status="failed", data={"worker_id": worker_id, "model_type": model_type, "worker_address": worker_address, "error": "worker_already_registered"})
+                self._logger.warning(action="worker_registration", status="skipped", data={"worker_id": worker_id, "model_type": model_type, "worker_address": worker_address, "error": "worker_already_registered"})
                 return
             
             self._workers[worker_id] = WorkerData(worker_id = worker_id, model_type = model_type, worker_address = worker_address) # Add worker to storage using defined structure
@@ -26,7 +26,7 @@ class SessionManager:
             for worker in self._workers.values():
                 if worker.model_type == model_type and worker.status == "ready":
                     worker.status = "busy"
-                    self._logger.info(action="worker_acquisition", status="in progress", data={"worker_id": worker.worker_id, "model_type": worker.model_type})
+                    self._logger.info(action="worker_acquisition", status="success", data={"worker_id": worker.worker_id, "model_type": worker.model_type})
                     return worker
             return None
     
@@ -35,7 +35,7 @@ class SessionManager:
         async with self._lock:
             if worker_id in self._workers:
                 self._workers[worker_id].status = "ready"
-                self._logger.info(action="worker_release", status="in progress", data={"worker_id": self._workers[worker_id].worker_id, "model_type": self._workers[worker_id].model_type})
+                self._logger.info(action="worker_release", status="success", data={"worker_id": self._workers[worker_id].worker_id, "model_type": self._workers[worker_id].model_type})
     
     async def list_workers(self) -> list[WorkerData]:
         """Function to list all registered workers in storage"""
