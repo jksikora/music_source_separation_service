@@ -42,7 +42,7 @@ if isinstance(main_address, str) and main_address.startswith("main:"): # When th
 
 
 # === Create HTTP Client ===
-client = httpx.Client(base_url=f"http://{main_address}", timeout=600.0) # Increased timeout to 600 seconds for long-running model inference
+client = httpx.Client(base_url=f"http://{main_address}", timeout=None)
 
 
 # === Prepare Results Directory and CSV Files for Separation Speed Test Results ===
