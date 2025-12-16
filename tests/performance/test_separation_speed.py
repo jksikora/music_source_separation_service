@@ -1,13 +1,35 @@
 import soundfile as sf
 import numpy as np
 from pathlib import Path
-import yaml, httpx, os, csv, io, math, random, time
+import gdown
+import yaml, httpx, os, csv, io, math, random, time, requests, zipfile, argparse
 
 # --- Separation Speed Test ---
 
-# === Load Database ===
-db_path = "/mnt/d/studia/praca_inzynierska/database/"
+# === Database Loader Function ===
+def get_database(root_path=None):
+    if root_path is None:
+        tests_dir = Path(__file__).resolve().parents[1]  # Get the 'tests' directory
+        root_path = tests_dir / "database" # Default path to store database: 'tests/database'
+    else:
+        root_path = Path(root_path) # Convert provided string to Path object
+    root_path.mkdir(parents=True, exist_ok=True) # Create directory if it doesn't exist; parents=True to create any necessary parent directories, exist_ok=True avoids error if it already exists
 
+    if not any(root_path.iterdir()): # Check if directory is empty
+        zip_path = root_path / "database.zip" # Create a path for the downloaded zip file
+        url = "https://drive.google.com/uc?id=1NJrrlGa2HhB1VhbfOYZMLfSVXiPcanU8"
+
+        print(f"Downloading database to {zip_path} ...")
+        gdown.download(url, str(zip_path), quiet=False) # Download the zip file from Google Drive; quiet=False to show progress bar in console
+
+        print(f"Unpacking 'database.zip' to {root_path} ...")
+        with zipfile.ZipFile(zip_path, 'r') as z: # Open the downloaded zip file for reading
+            z.extractall(root_path) # Extract all contents to the root_path
+        os.remove(zip_path) # Remove the zip file after extraction
+        
+        print(f"Database successfully downloaded and unpacked to {root_path}")
+
+    return str(root_path)
 
 # === Main Address Loaded from YAML File ===
 with open("workers/scnet/scnet1_config.yaml", "r") as f:
@@ -215,9 +237,19 @@ def aggregate_results_to_csv(csv_input: str, csv_output: str) -> None:
 # === Main Execution Block ===
 if __name__ == "__main__":
     prefix = ""
+    model = "scnet"
+    db_path = None
+    
+    parser = argparse.ArgumentParser(description="Separation Speed Test")
+    parser.add_argument('--prefix', type=str, default=prefix, help='Filename prefix for result files')
+    parser.add_argument('--model', type=str, default=model, help='Model to test ("scnet" or "dttnet")')
+    parser.add_argument('--db', type=str, default=db_path, help='Path to database directory')
+    args = parser.parse_args()
+
+    db_path = get_database(args.db)
     warmup_separation()
-    csv_client, csv_model, agg_csv_client, agg_csv_model = get_result_files(prefix)
-    results_client, results_model = test_separation_speed("scnet", prefix)
+    csv_client, csv_model, agg_csv_client, agg_csv_model = get_result_files(args.prefix)
+    results_client, results_model = test_separation_speed(args.model, args.prefix)
     results_to_csv(csv_client, results_client)
     results_to_csv(csv_model, results_model)
     aggregate_results_to_csv(csv_client, agg_csv_client)

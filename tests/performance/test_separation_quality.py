@@ -1,11 +1,12 @@
 import soundfile as sf
 import numpy as np
-import musdb, museval, io, csv, os, yaml, httpx
+from pathlib import Path
+import musdb, museval, io, csv, os, yaml, httpx, argparse
 
 # --- Separation Quality Benchmark Test ---
 
 # === Load MUSDB18-HQ Dataset ===
-mus = musdb.DB(root="/mnt/d/studia/praca_inzynierska/musdb18hq", is_wav=True, subsets="test")
+mus = musdb.DB(root="", is_wav=True, subsets="test")
 
 
 # === Main Address Loaded from YAML File ===
@@ -52,7 +53,7 @@ def _audio_to_bytes(audio: np.ndarray, sample_rate: int) -> bytes:
 
 
 # === Test Separation Quality Function ===
-def test_separation_quality(model: str, prefix: str) -> None:
+def test_separation_quality(mus: musdb.DB, model: str, prefix: str) -> None:
     results = museval.EvalStore() # Initialize EvalStore to hold separation quality results
     for track in mus.tracks:  # Limit to first n songs by adding [:n]
         try: # Added try-except to allow saving partial results
@@ -150,7 +151,14 @@ def agg_tracks_to_csv(csv_tracks: str, prefix: str) -> None:
 # === Main Execution Block ===
 if __name__ == "__main__":
     prefix = ""
-    csv_frames, csv_tracks = get_result_files(prefix)
-    test_separation_quality("scnet", prefix)
-    agg_frames_to_csv(csv_frames, prefix)
-    agg_tracks_to_csv(csv_tracks, prefix)
+    model = "scnet"
+
+    parser = argparse.ArgumentParser(description="Separation Quality Test")
+    parser.add_argument('--prefix', type=str, default=prefix, help='Filename prefix for result files')
+    parser.add_argument('--model', type=str, default=model, help='Model to test ("scnet" or "dttnet")')
+    args = parser.parse_args()
+
+    csv_frames, csv_tracks = get_result_files(args.prefix)
+    test_separation_quality(mus, args.model, args.prefix)
+    agg_frames_to_csv(csv_frames, args.prefix)
+    agg_tracks_to_csv(csv_tracks, args.prefix)
