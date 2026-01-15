@@ -141,15 +141,19 @@ if __name__ == "__main__":
     model = "scnet"
 ```
 #### test source separation speed
-3. run the **separation speed test**
+3. (optional) set the URL to the Google Drive database archive (.zip) to download it automatically
+```python
+url = "" # URL to the Google Drive database archive (.zip)
+```
+4. run the **separation speed test**
 ```bash
 python ./tests/performance/test_separation_quality.py --prefix <PREFIX> --model <MODEL> --db <DB_DIRECTORY>
 ```
 ##### arguments
 - **--prefix**: filename prefix for the result files
 - **--model**: model to test ('scnet' or 'dttnet')
-- **--db**: directory where your own database is stored (default: `./tests/`)
-4. (optional) specify the default parameters in **test_separation_speed.py** to avoid passing arguments every time
+- **--db**: directory where your database is stored, or where a database downloaded from a provided link will be placed (default: `./tests/`)
+5. (optional) specify the default parameters in **test_separation_speed.py** to avoid passing arguments every time
 ```python
 # === Main Execution Block ===
 if __name__ == "__main__":
