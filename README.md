@@ -152,7 +152,7 @@ python ./tests/performance/test_separation_quality.py --prefix <PREFIX> --model 
 ##### arguments
 - **--prefix**: filename prefix for the result files
 - **--model**: model to test ('scnet' or 'dttnet')
-- **--db**: directory where your database is stored, or where a database downloaded from a provided link will be placed (default: `./tests/`)
+- **--db**: directory where your database is stored, or where a database downloaded from a provided link will be saved (default: `./tests/`)
 5. (optional) specify the default parameters in **test_separation_speed.py** to avoid passing arguments every time
 ```python
 # === Main Execution Block ===
