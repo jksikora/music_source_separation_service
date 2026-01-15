@@ -9,25 +9,25 @@ import yaml, httpx, os, csv, io, math, random, time, requests, zipfile, argparse
 # === Database Loader Function ===
 def get_database(root_path=None):
     if root_path is None:
-        tests_dir = Path(__file__).resolve().parents[1]  # Get the 'tests' directory
-        root_path = tests_dir / "database" # Default path to store database: 'tests/database'
-    else:
-        root_path = Path(root_path) # Convert provided string to Path object
-    root_path.mkdir(parents=True, exist_ok=True) # Create directory if it doesn't exist; parents=True to create any necessary parent directories, exist_ok=True avoids error if it already exists
+        raise FileNotFoundError(
+            "Database not found: no database path provided (--db)"
+        )
+    root_path = Path(root_path) # Convert provided string to Path object
 
-    if not any(root_path.iterdir()): # Check if directory is empty
-        zip_path = root_path / "database.zip" # Create a path for the downloaded zip file
-        url = "https://drive.google.com/uc?id=1NJrrlGa2HhB1VhbfOYZMLfSVXiPcanU8"
-
-        print(f"Downloading database to {zip_path} ...")
-        gdown.download(url, str(zip_path), quiet=False) # Download the zip file from Google Drive; quiet=False to show progress bar in console
-
-        print(f"Unpacking 'database.zip' to {root_path} ...")
-        with zipfile.ZipFile(zip_path, 'r') as z: # Open the downloaded zip file for reading
-            z.extractall(root_path) # Extract all contents to the root_path
-        os.remove(zip_path) # Remove the zip file after extraction
+    if not root_path.exists():
+        raise FileNotFoundError(
+            f"Database not found: provided path does not exist: {root_path}"
+        )
         
-        print(f"Database successfully downloaded and unpacked to {root_path}")
+    if not root_path.is_dir():
+        raise FileNotFoundError(
+            f"Database not found: provided path is not a directory: {root_path}"
+        )
+        
+    if not any(root_path.iterdir()):
+        raise FileNotFoundError(
+            f"Database not found: provided directory is empty: {root_path}"
+        )
 
     return str(root_path)
 
