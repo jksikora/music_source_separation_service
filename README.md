@@ -161,3 +161,22 @@ if __name__ == "__main__":
     model = "scnet"
     db_path = ""
 ```
+
+
+## appendix: track list
+list of tracks used to test separation speed in the study presenting this system:
+- Charli xcx - Von dutch
+- Doechii - Nissan Atlima
+- Future, Metro Boomin, Kendrick Lamar - Like That
+- Justice, Tame Impala - Neverender
+- Kacey Musgraves - The Architect
+- Kendrick Lamar - Not Like Us
+- Lay Gaga, Bruno Mars - Die With A Smile
+- Rapsody, Erykah Badu - 3AM
+- Sabrina Carpenter - Espresso
+- Samara Joy, Sullivan - Twinkle Twinkle Little Me
+- Sheila E. - Bemba Colorá
+- St. Vincent - Broken Man
+- St. Vincent - Flea
+- SZA - Saturn
+- Tasha Cobbs Leonard - One Hallelujah
